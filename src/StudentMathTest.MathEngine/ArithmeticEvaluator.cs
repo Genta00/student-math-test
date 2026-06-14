@@ -1,10 +1,12 @@
+using StudentMathTest.Domain.Interfaces;
+
 namespace StudentMathTest.MathEngine;
 
 /// <summary>
 /// Evaluates arithmetic expressions using a recursive-descent parser.
 /// Multiply and divide bind tighter than add and subtract; equal-priority operators evaluate left to right.
 /// </summary>
-public sealed class ArithmeticEvaluator
+public sealed class ArithmeticEvaluator : IMathEngine
 {
     private string _input = string.Empty;
     private int _pos;

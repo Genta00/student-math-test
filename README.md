@@ -9,10 +9,11 @@ StudentMathTest.sln
 ├── StudentMathTest.Api          → ASP.NET Core Web API, Razor Pages UI, Swagger, DI wiring
 ├── StudentMathTest.Domain       → Models, Interfaces (zero external dependencies)
 ├── StudentMathTest.Application  → EF Core DbContext, services, DTOs
-└── StudentMathTest.MathEngine   → Independent arithmetic expression evaluator
+├── StudentMathTest.MathEngine   → Independent arithmetic expression evaluator
+└── StudentMathTest.Tests        → xUnit unit tests (MathEngine, XML parsing, ExamService)
 ```
 
-**Tech stack:** .NET 8, ASP.NET Core, Razor Pages, Entity Framework Core 8, SQLite, Swashbuckle/Swagger
+**Tech stack:** .NET 8, ASP.NET Core, Razor Pages, Entity Framework Core 8, SQLite, Swashbuckle/Swagger, xUnit, Moq
 
 ## Getting Started
 
@@ -32,6 +33,14 @@ Swagger API docs are available at `/swagger`.
 The SQLite database (`mathtest.db`) is created automatically on first run.
 
 Or open `StudentMathTest.sln` in Rider/Visual Studio and press Run.
+
+### Run Tests
+
+```bash
+dotnet test tests/StudentMathTest.Tests
+```
+
+40 unit tests cover the math engine, XML parsing, and exam grading logic.
 
 ## UI Pages
 
@@ -202,7 +211,7 @@ The `ArithmeticEvaluator` uses a recursive-descent parser with standard operator
 ## Assumptions
 
 - Teacher and Student IDs in the XML are used as primary keys. If an ID doesn't exist in the database, the entity is auto-created (upsert).
-- Standard operator precedence applies; no parentheses are expected in tasks.
+- Standard operator precedence applies (`*` and `/` before `+` and `-`). Parentheses are supported by the math engine but are not used in the sample exam tasks.
 - Decimal division is used (e.g. `3/6 = 0.5`).
 - Uploading the same exam XML multiple times creates new exam records (no deduplication).
 - No authentication or roles — the Swagger UI is fully open.
