@@ -8,6 +8,9 @@
 *.db-shm
 *.db-wal
 
+# JetBrains Rider — workspace is machine-specific
+.idea/**/workspace.xml
+
 # dotenv files
 .env
 

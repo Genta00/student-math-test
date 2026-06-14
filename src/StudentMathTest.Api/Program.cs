@@ -10,7 +10,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")
         ?? "Data Source=mathtest.db"));
 
-builder.Services.AddScoped<IMathEngine, MathEngineAdapter>();
+builder.Services.AddScoped<IMathEngine, ArithmeticEvaluator>();
 builder.Services.AddScoped<IXmlProcessor, XmlProcessorService>();
 builder.Services.AddScoped<IExamService, ExamService>();
 builder.Services.AddScoped<ITeacherService, TeacherService>();
