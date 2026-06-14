@@ -1,0 +1,59 @@
+@page
+@model StudentMathTest.Api.Pages.Teachers.IndexModel
+@{ ViewData["Title"] = "Teachers"; }
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Teachers</h2>
+</div>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Add New Teacher</div>
+    <div class="card-body">
+        <form method="post" class="row g-2 align-items-end">
+            <div class="col-sm-8">
+                <label class="form-label">Name</label>
+                <input asp-for="NewTeacherName" class="form-control" placeholder="e.g. Jane Smith" required />
+            </div>
+            <div class="col-sm-4">
+                <button type="submit" class="btn btn-primary w-100">Add Teacher</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header fw-semibold">Registered Teachers</div>
+    <div class="card-body p-0">
+        @if (!Model.Teachers.Any())
+        {
+            <p class="text-muted p-3 mb-0">No teachers registered yet.</p>
+        }
+        else
+        {
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>ID</th><th>Name</th><th>Students</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var teacher in Model.Teachers)
+                    {
+                        <tr>
+                            <td class="text-muted">#@teacher.Id</td>
+                            <td>@teacher.Name</td>
+                            <td>@teacher.Students.Count</td>
+                            <td>
+                                <a asp-page="/Teachers/Students" asp-route-teacherId="@teacher.Id" class="btn btn-sm btn-outline-primary me-1">Manage Students</a>
+                                <a asp-page="/Teachers/Upload" asp-route-teacherId="@teacher.Id" class="btn btn-sm btn-outline-success">Upload Exam</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
