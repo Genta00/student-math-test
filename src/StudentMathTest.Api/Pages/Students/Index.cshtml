@@ -1,0 +1,21 @@
+@page
+@model StudentMathTest.Api.Pages.Students.IndexModel
+@{ ViewData["Title"] = "Student Analytics"; }
+
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <h2 class="mb-4 text-center">Student Analytics</h2>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <p class="text-muted mb-3">Enter your Student ID to view your exam history and results.</p>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Student ID</label>
+                        <input asp-for="StudentId" type="number" class="form-control form-control-lg" placeholder="e.g. 12345" min="1" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg">View My Exams</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

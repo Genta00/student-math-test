@@ -1,0 +1,64 @@
+@page
+@model StudentMathTest.Api.Pages.Teachers.StudentsModel
+@{ ViewData["Title"] = $"Students — {Model.Teacher?.Name}"; }
+
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-page="/Teachers/Index">Teachers</a></li>
+        <li class="breadcrumb-item active">@Model.Teacher?.Name</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Students of @Model.Teacher?.Name</h2>
+    <a asp-page="/Teachers/Upload" asp-route-teacherId="@Model.TeacherId" class="btn btn-success">Upload Exam XML</a>
+</div>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Add New Student</div>
+    <div class="card-body">
+        <form method="post" class="row g-2 align-items-end">
+            <input type="hidden" asp-for="TeacherId" />
+            <div class="col-sm-8">
+                <label class="form-label">Student Name</label>
+                <input asp-for="NewStudentName" class="form-control" placeholder="e.g. Alice Johnson" required />
+            </div>
+            <div class="col-sm-4">
+                <button type="submit" class="btn btn-primary w-100">Add Student</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header fw-semibold">Enrolled Students</div>
+    <div class="card-body p-0">
+        @if (!Model.Students.Any())
+        {
+            <p class="text-muted p-3 mb-0">No students enrolled yet.</p>
+        }
+        else
+        {
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>ID</th><th>Name</th><th>Analytics</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var student in Model.Students)
+                    {
+                        <tr>
+                            <td class="text-muted">#@student.Id</td>
+                            <td>@student.Name</td>
+                            <td><a asp-page="/Students/Exams" asp-route-studentId="@student.Id" class="btn btn-sm btn-outline-secondary">View Exams</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

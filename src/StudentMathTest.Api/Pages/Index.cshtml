@@ -1,0 +1,44 @@
+@page
+@model StudentMathTest.Api.Pages.IndexModel
+@{ ViewData["Title"] = "Home"; }
+
+<div class="row justify-content-center text-center my-5">
+    <div class="col-lg-7">
+        <h1 class="display-5 fw-bold mb-3">Student Math Test System</h1>
+        <p class="lead text-muted mb-5">
+            Teachers upload XML exam files. The system grades each arithmetic task automatically.
+            Students can review their results task by task.
+        </p>
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a asp-page="/Teachers/Index" class="btn btn-primary btn-lg px-5">Teacher Portal</a>
+            <a asp-page="/Students/Index" class="btn btn-outline-secondary btn-lg px-5">Student Analytics</a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">1. Upload Exam XML</h5>
+                <p class="card-text text-muted">Teachers upload an XML file containing arithmetic tasks for one or more students.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">2. Automatic Grading</h5>
+                <p class="card-text text-muted">Each task is evaluated by the math engine using standard operator precedence (* / before + -).</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">3. Student Analytics</h5>
+                <p class="card-text text-muted">Students view their exams and see which answers were correct or incorrect, with the right answer shown.</p>
+            </div>
+        </div>
+    </div>
+</div>

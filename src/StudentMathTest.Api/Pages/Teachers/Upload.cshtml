@@ -1,0 +1,77 @@
+@page
+@model StudentMathTest.Api.Pages.Teachers.UploadModel
+@{ ViewData["Title"] = "Upload Exam"; }
+
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-page="/Teachers/Index">Teachers</a></li>
+        @if (Model.TeacherId > 0)
+        {
+            <li class="breadcrumb-item">
+                <a asp-page="/Teachers/Students" asp-route-teacherId="@Model.TeacherId">@(Model.TeacherName ?? $"Teacher {Model.TeacherId}")</a>
+            </li>
+        }
+        <li class="breadcrumb-item active">Upload Exam</li>
+    </ol>
+</nav>
+
+<h2 class="mb-4">Upload Exam XML</h2>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Select XML File</div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" asp-for="TeacherId" />
+            <div class="mb-3">
+                <label class="form-label">Exam XML File</label>
+                <input type="file" name="file" class="form-control" accept=".xml,text/xml,application/xml" required />
+                <div class="form-text">Expected: &lt;Teacher ID="..."&gt;&lt;Students&gt;&lt;Student ID="..."&gt;&lt;Exam Id="..."&gt;&lt;Task id="..."&gt;expr = answer&lt;/Task&gt;...</div>
+            </div>
+            <button type="submit" class="btn btn-success">Grade Exams</button>
+        </form>
+    </div>
+</div>
+
+@if (Model.Results is not null)
+{
+    <div class="card shadow-sm">
+        <div class="card-header fw-semibold d-flex justify-content-between">
+            <span>Grading Results</span>
+            <span class="badge bg-secondary">@Model.Results.Count() exam(s) processed</span>
+        </div>
+        <div class="card-body p-0">
+            @if (!Model.Results.Any())
+            {
+                <p class="text-muted p-3 mb-0">No exams found in the uploaded file.</p>
+            }
+            else
+            {
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Exam DB ID</th><th>XML Exam ID</th><th>Student ID</th><th>Tasks</th><th>Correct</th><th>Score</th><th>Detail</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var exam in Model.Results)
+                        {
+                            var scoreClass = exam.Score >= 80 ? "bg-success" : exam.Score >= 50 ? "bg-warning text-dark" : "bg-danger";
+                            <tr>
+                                <td class="text-muted">#@exam.ExamId</td>
+                                <td>@exam.XmlExamId</td>
+                                <td>@exam.StudentId</td>
+                                <td>@exam.TotalTasks</td>
+                                <td>@exam.CorrectTasks</td>
+                                <td><span class="badge @scoreClass">@exam.Score%</span></td>
+                                <td><a asp-page="/Students/ExamDetail" asp-route-examId="@exam.ExamId" class="btn btn-sm btn-outline-primary">View Detail</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
