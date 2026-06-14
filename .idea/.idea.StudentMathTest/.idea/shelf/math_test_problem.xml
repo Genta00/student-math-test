@@ -1,0 +1,12 @@
+<changelist name="math_test_problem" date="1781447815955" recycled="false">
+  <option name="PATH" value="$PROJECT_DIR$/.idea/.idea.StudentMathTest/.idea/shelf/math_test_problem/shelved.patch" />
+  <option name="DESCRIPTION" value="math test problem" />
+  <binary>
+    <option name="AFTER_PATH" value="src/StudentMathTest.Api/mathtest.db" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/.idea.StudentMathTest/.idea/shelf/math_test_problem/mathtest.db" />
+  </binary>
+  <binary>
+    <option name="AFTER_PATH" value="src/StudentMathTest.Api/mathtest.db-shm" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/.idea.StudentMathTest/.idea/shelf/math_test_problem/mathtest.db-shm" />
+  </binary>
+</changelist>

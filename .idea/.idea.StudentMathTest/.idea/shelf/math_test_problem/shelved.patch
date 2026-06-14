@@ -1,0 +1,3080 @@
+Index: src/StudentMathTest.MathEngine/StudentMathTest.MathEngine.csproj
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.MathEngine/StudentMathTest.MathEngine.csproj b/src/StudentMathTest.MathEngine/StudentMathTest.MathEngine.csproj
+new file mode 100644
+--- /dev/null	(date 1781369651399)
++++ b/src/StudentMathTest.MathEngine/StudentMathTest.MathEngine.csproj	(date 1781369651399)
+@@ -0,0 +1,13 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <ItemGroup>
++    <ProjectReference Include="..\StudentMathTest.Domain\StudentMathTest.Domain.csproj" />
++  </ItemGroup>
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++</Project>
+Index: src/StudentMathTest.MathEngine/ArithmeticEvaluator.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.MathEngine/ArithmeticEvaluator.cs b/src/StudentMathTest.MathEngine/ArithmeticEvaluator.cs
+new file mode 100644
+--- /dev/null	(date 1781447405866)
++++ b/src/StudentMathTest.MathEngine/ArithmeticEvaluator.cs	(date 1781447405866)
+@@ -0,0 +1,77 @@
++namespace StudentMathTest.MathEngine;
++
++/// <summary>
++/// Evaluates arithmetic expressions using a recursive-descent parser.
++/// Multiply and divide bind tighter than add and subtract; equal-priority operators evaluate left to right.
++/// </summary>
++public sealed class ArithmeticEvaluator
++{
++    private string _input = string.Empty;
++    private int _pos;
++
++    public decimal Evaluate(string expression)
++    {
++        _input = expression.Replace(" ", "");
++        _pos = 0;
++        var result = ParseExpr();
++        return _pos != _input.Length ? throw new InvalidOperationException($"Unexpected character '{_input[_pos]}' at position {_pos}.") : result;
++    }
++
++    private decimal ParseExpr()
++    {
++        var left = ParseTerm();
++        while (_pos < _input.Length && (_input[_pos] == '+' || _input[_pos] == '-'))
++        {
++            var op = _input[_pos++];
++            var right = ParseTerm();
++            left = op == '+' ? left + right : left - right;
++        }
++        return left;
++    }
++
++    private decimal ParseTerm()
++    {
++        var left = ParseFactor();
++        while (_pos < _input.Length && (_input[_pos] == '*' || _input[_pos] == '/'))
++        {
++            var op = _input[_pos++];
++            var right = ParseFactor();
++            if (op == '/' && right == 0)
++                throw new DivideByZeroException("Division by zero in expression.");
++            left = op == '*' ? left * right : left / right;
++        }
++        return left;
++    }
++
++    private decimal ParseFactor()
++    {
++        if (_pos < _input.Length && _input[_pos] == '(')
++        {
++            _pos++;
++            var val = ParseExpr();
++            if (_pos >= _input.Length || _input[_pos] != ')')
++                throw new InvalidOperationException("Missing closing parenthesis.");
++            _pos++;
++            return val;
++        }
++
++        var negative = false;
++        if (_pos < _input.Length && _input[_pos] == '-')
++        {
++            negative = true;
++            _pos++;
++        }
++
++        if (_pos >= _input.Length || (!char.IsDigit(_input[_pos]) && _input[_pos] != '.'))
++            throw new InvalidOperationException($"Expected number at position {_pos}.");
++
++        var start = _pos;
++        while (_pos < _input.Length && (char.IsDigit(_input[_pos]) || _input[_pos] == '.'))
++            _pos++;
++
++        var number = decimal.Parse(_input[start.._pos],
++            System.Globalization.CultureInfo.InvariantCulture);
++
++        return negative ? -number : number;
++    }
++}
+Index: src/StudentMathTest.Api/appsettings.Development.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/appsettings.Development.json b/src/StudentMathTest.Api/appsettings.Development.json
+new file mode 100644
+--- /dev/null	(date 1781369544888)
++++ b/src/StudentMathTest.Api/appsettings.Development.json	(date 1781369544888)
+@@ -0,0 +1,8 @@
++{
++  "Logging": {
++    "LogLevel": {
++      "Default": "Information",
++      "Microsoft.AspNetCore": "Warning"
++    }
++  }
++}
+Index: src/StudentMathTest.Api/Program.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Program.cs b/src/StudentMathTest.Api/Program.cs
+new file mode 100644
+--- /dev/null	(date 1781446914562)
++++ b/src/StudentMathTest.Api/Program.cs	(date 1781446914562)
+@@ -0,0 +1,55 @@
++using Microsoft.EntityFrameworkCore;
++using Microsoft.OpenApi.Models;
++using StudentMathTest.Application.Data;
++using StudentMathTest.Application.Services;
++using StudentMathTest.Domain.Interfaces;
++using StudentMathTest.MathEngine;
++
++var builder = WebApplication.CreateBuilder(args);
++
++builder.Services.AddDbContext<AppDbContext>(options =>
++    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")
++        ?? "Data Source=mathtest.db"));
++
++builder.Services.AddScoped<IMathEngine, MathEngineAdapter>();
++builder.Services.AddScoped<IXmlProcessor, XmlProcessorService>();
++builder.Services.AddScoped<IExamService, ExamService>();
++builder.Services.AddScoped<ITeacherService, TeacherService>();
++
++builder.Services.AddRazorPages();
++builder.Services.AddControllers();
++builder.Services.AddEndpointsApiExplorer();
++builder.Services.AddSwaggerGen(c =>
++{
++    c.SwaggerDoc("v1", new OpenApiInfo
++    {
++        Title = "Student Math Test API",
++        Version = "v1",
++        Description = "API for teachers to upload student math exams and for students to review their results."
++    });
++    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
++    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
++    if (File.Exists(xmlPath))
++        c.IncludeXmlComments(xmlPath);
++});
++
++var app = builder.Build();
++
++using (var scope = app.Services.CreateScope())
++{
++    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
++    db.Database.EnsureCreated();
++}
++
++app.UseSwagger();
++app.UseSwaggerUI(c =>
++{
++    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Student Math Test API v1");
++    c.RoutePrefix = "swagger";
++});
++
++app.UseStaticFiles();
++app.MapRazorPages();
++app.MapControllers();
++
++app.Run();
+Index: src/StudentMathTest.Api/appsettings.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/appsettings.json b/src/StudentMathTest.Api/appsettings.json
+new file mode 100644
+--- /dev/null	(date 1781369762043)
++++ b/src/StudentMathTest.Api/appsettings.json	(date 1781369762043)
+@@ -0,0 +1,12 @@
++{
++  "ConnectionStrings": {
++    "DefaultConnection": "Data Source=mathtest.db"
++  },
++  "Logging": {
++    "LogLevel": {
++      "Default": "Information",
++      "Microsoft.AspNetCore": "Warning"
++    }
++  },
++  "AllowedHosts": "*"
++}
+Index: src/StudentMathTest.MathEngine/MathEngineAdapter.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.MathEngine/MathEngineAdapter.cs b/src/StudentMathTest.MathEngine/MathEngineAdapter.cs
+new file mode 100644
+--- /dev/null	(date 1781369655708)
++++ b/src/StudentMathTest.MathEngine/MathEngineAdapter.cs	(date 1781369655708)
+@@ -0,0 +1,10 @@
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.MathEngine;
++
++public sealed class MathEngineAdapter : IMathEngine
++{
++    private readonly ArithmeticEvaluator _evaluator = new();
++
++    public decimal Evaluate(string expression) => _evaluator.Evaluate(expression);
++}
+Index: src/StudentMathTest.Api/Pages/_ViewStart.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/_ViewStart.cshtml b/src/StudentMathTest.Api/Pages/_ViewStart.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385379196)
++++ b/src/StudentMathTest.Api/Pages/_ViewStart.cshtml	(date 1781385379196)
+@@ -0,0 +1,3 @@
++@{
++    Layout = "_Layout";
++}
+Index: src/StudentMathTest.Api/Pages/_ViewImports.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/_ViewImports.cshtml b/src/StudentMathTest.Api/Pages/_ViewImports.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385376801)
++++ b/src/StudentMathTest.Api/Pages/_ViewImports.cshtml	(date 1781385376801)
+@@ -0,0 +1,3 @@
++@using StudentMathTest.Api.Pages
++@namespace StudentMathTest.Api.Pages
++@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+Index: src/StudentMathTest.Api/Pages/Index.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Index.cshtml b/src/StudentMathTest.Api/Pages/Index.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385397084)
++++ b/src/StudentMathTest.Api/Pages/Index.cshtml	(date 1781385397084)
+@@ -0,0 +1,50 @@
++@page
++@model StudentMathTest.Api.Pages.IndexModel
++@{
++    ViewData["Title"] = "Home";
++}
++
++<div class="row justify-content-center text-center my-5">
++    <div class="col-lg-7">
++        <h1 class="display-5 fw-bold mb-3">Student Math Test System</h1>
++        <p class="lead text-muted mb-5">
++            Teachers upload XML exam files. The system grades each arithmetic task automatically.
++            Students can review their results task by task.
++        </p>
++        <div class="d-flex justify-content-center gap-3 flex-wrap">
++            <a asp-page="/Teachers/Index" class="btn btn-primary btn-lg px-5">
++                Teacher Portal
++            </a>
++            <a asp-page="/Students/Index" class="btn btn-outline-secondary btn-lg px-5">
++                Student Analytics
++            </a>
++        </div>
++    </div>
++</div>
++
++<div class="row g-4 mt-2">
++    <div class="col-md-4">
++        <div class="card h-100 shadow-sm">
++            <div class="card-body">
++                <h5 class="card-title">1. Upload Exam XML</h5>
++                <p class="card-text text-muted">Teachers upload an XML file containing arithmetic tasks for one or more students.</p>
++            </div>
++        </div>
++    </div>
++    <div class="col-md-4">
++        <div class="card h-100 shadow-sm">
++            <div class="card-body">
++                <h5 class="card-title">2. Automatic Grading</h5>
++                <p class="card-text text-muted">Each task is evaluated by the math engine using standard operator precedence (* / before + -).</p>
++            </div>
++        </div>
++    </div>
++    <div class="col-md-4">
++        <div class="card h-100 shadow-sm">
++            <div class="card-body">
++                <h5 class="card-title">3. Student Analytics</h5>
++                <p class="card-text text-muted">Students view their exams and see which answers were correct or incorrect, with the right answer shown.</p>
++            </div>
++        </div>
++    </div>
++</div>
+Index: src/StudentMathTest.Api/Pages/Index.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Index.cshtml.cs b/src/StudentMathTest.Api/Pages/Index.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385399730)
++++ b/src/StudentMathTest.Api/Pages/Index.cshtml.cs	(date 1781385399730)
+@@ -0,0 +1,8 @@
++using Microsoft.AspNetCore.Mvc.RazorPages;
++
++namespace StudentMathTest.Api.Pages;
++
++public class IndexModel : PageModel
++{
++    public void OnGet() { }
++}
+Index: src/StudentMathTest.Api/Pages/Shared/_Layout.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Shared/_Layout.cshtml b/src/StudentMathTest.Api/Pages/Shared/_Layout.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385387117)
++++ b/src/StudentMathTest.Api/Pages/Shared/_Layout.cshtml	(date 1781385387117)
+@@ -0,0 +1,45 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++    <meta charset="utf-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>@ViewData["Title"] — Student Math Test</title>
++    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
++    <style>
++        body { background-color: #f8f9fa; }
++        .navbar-brand { font-weight: 700; letter-spacing: .5px; }
++        .badge-correct { background-color: #198754; }
++        .badge-wrong   { background-color: #dc3545; }
++        .table th { white-space: nowrap; }
++    </style>
++</head>
++<body>
++    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm">
++        <div class="container">
++            <a class="navbar-brand" asp-page="/Index">&#x1F4D0; Student Math Test</a>
++            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
++                <span class="navbar-toggler-icon"></span>
++            </button>
++            <div class="collapse navbar-collapse" id="navMenu">
++                <ul class="navbar-nav ms-auto">
++                    <li class="nav-item">
++                        <a class="nav-link" asp-page="/Teachers/Index">Teachers</a>
++                    </li>
++                    <li class="nav-item">
++                        <a class="nav-link" asp-page="/Students/Index">Students</a>
++                    </li>
++                    <li class="nav-item">
++                        <a class="nav-link" href="/swagger" target="_blank">API Docs</a>
++                    </li>
++                </ul>
++            </div>
++        </div>
++    </nav>
++
++    <div class="container pb-5">
++        @RenderBody()
++    </div>
++
++    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
++</body>
++</html>
+Index: src/StudentMathTest.Api/Pages/Teachers/Index.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Teachers/Index.cshtml.cs b/src/StudentMathTest.Api/Pages/Teachers/Index.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385409022)
++++ b/src/StudentMathTest.Api/Pages/Teachers/Index.cshtml.cs	(date 1781385409022)
+@@ -0,0 +1,38 @@
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.RazorPages;
++using StudentMathTest.Domain.Interfaces;
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Api.Pages.Teachers;
++
++public class IndexModel : PageModel
++{
++    private readonly ITeacherService _teacherService;
++
++    public IndexModel(ITeacherService teacherService) => _teacherService = teacherService;
++
++    public IEnumerable<Teacher> Teachers { get; set; } = [];
++
++    [BindProperty]
++    public string NewTeacherName { get; set; } = string.Empty;
++
++    public string? ErrorMessage { get; set; }
++
++    public async Task OnGetAsync()
++    {
++        Teachers = await _teacherService.GetAllAsync();
++    }
++
++    public async Task<IActionResult> OnPostAsync()
++    {
++        if (string.IsNullOrWhiteSpace(NewTeacherName))
++        {
++            ErrorMessage = "Teacher name is required.";
++            Teachers = await _teacherService.GetAllAsync();
++            return Page();
++        }
++
++        await _teacherService.CreateAsync(NewTeacherName.Trim());
++        return RedirectToPage();
++    }
++}
+Index: src/StudentMathTest.Api/Pages/Teachers/Index.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Teachers/Index.cshtml b/src/StudentMathTest.Api/Pages/Teachers/Index.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385418252)
++++ b/src/StudentMathTest.Api/Pages/Teachers/Index.cshtml	(date 1781385418252)
+@@ -0,0 +1,68 @@
++@page
++@model StudentMathTest.Api.Pages.Teachers.IndexModel
++@{
++    ViewData["Title"] = "Teachers";
++}
++
++<div class="d-flex justify-content-between align-items-center mb-4">
++    <h2 class="mb-0">Teachers</h2>
++</div>
++
++@if (Model.ErrorMessage is not null)
++{
++    <div class="alert alert-danger">@Model.ErrorMessage</div>
++}
++
++<div class="card shadow-sm mb-4">
++    <div class="card-header fw-semibold">Add New Teacher</div>
++    <div class="card-body">
++        <form method="post" class="row g-2 align-items-end">
++            <div class="col-sm-8">
++                <label class="form-label">Name</label>
++                <input asp-for="NewTeacherName" class="form-control" placeholder="e.g. Jane Smith" required />
++            </div>
++            <div class="col-sm-4">
++                <button type="submit" class="btn btn-primary w-100">Add Teacher</button>
++            </div>
++        </form>
++    </div>
++</div>
++
++<div class="card shadow-sm">
++    <div class="card-header fw-semibold">Registered Teachers</div>
++    <div class="card-body p-0">
++        @if (!Model.Teachers.Any())
++        {
++            <p class="text-muted p-3 mb-0">No teachers registered yet.</p>
++        }
++        else
++        {
++            <table class="table table-hover mb-0">
++                <thead class="table-light">
++                    <tr>
++                        <th>ID</th>
++                        <th>Name</th>
++                        <th>Students</th>
++                        <th>Actions</th>
++                    </tr>
++                </thead>
++                <tbody>
++                    @foreach (var teacher in Model.Teachers)
++                    {
++                        <tr>
++                            <td class="text-muted">#@teacher.Id</td>
++                            <td>@teacher.Name</td>
++                            <td>@teacher.Students.Count</td>
++                            <td>
++                                <a asp-page="/Teachers/Students" asp-route-teacherId="@teacher.Id"
++                                   class="btn btn-sm btn-outline-primary me-1">Manage Students</a>
++                                <a asp-page="/Teachers/Upload" asp-route-teacherId="@teacher.Id"
++                                   class="btn btn-sm btn-outline-success">Upload Exam</a>
++                            </td>
++                        </tr>
++                    }
++                </tbody>
++            </table>
++        }
++    </div>
++</div>
+Index: src/StudentMathTest.Api/Pages/Teachers/Students.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Teachers/Students.cshtml.cs b/src/StudentMathTest.Api/Pages/Teachers/Students.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385424885)
++++ b/src/StudentMathTest.Api/Pages/Teachers/Students.cshtml.cs	(date 1781385424885)
+@@ -0,0 +1,59 @@
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.RazorPages;
++using StudentMathTest.Domain.Interfaces;
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Api.Pages.Teachers;
++
++public class StudentsModel : PageModel
++{
++    private readonly ITeacherService _teacherService;
++
++    public StudentsModel(ITeacherService teacherService) => _teacherService = teacherService;
++
++    [BindProperty(SupportsGet = true)]
++    public int TeacherId { get; set; }
++
++    public Teacher? Teacher { get; set; }
++    public IEnumerable<Student> Students { get; set; } = [];
++
++    [BindProperty]
++    public string NewStudentName { get; set; } = string.Empty;
++
++    public string? ErrorMessage { get; set; }
++
++    public async Task<IActionResult> OnGetAsync()
++    {
++        Teacher = await _teacherService.GetByIdAsync(TeacherId);
++        if (Teacher is null)
++            return NotFound();
++
++        Students = await _teacherService.GetStudentsAsync(TeacherId);
++        return Page();
++    }
++
++    public async Task<IActionResult> OnPostAsync()
++    {
++        if (string.IsNullOrWhiteSpace(NewStudentName))
++        {
++            ErrorMessage = "Student name is required.";
++            Teacher = await _teacherService.GetByIdAsync(TeacherId);
++            Students = await _teacherService.GetStudentsAsync(TeacherId);
++            return Page();
++        }
++
++        try
++        {
++            await _teacherService.AddStudentAsync(TeacherId, NewStudentName.Trim());
++        }
++        catch (KeyNotFoundException ex)
++        {
++            ErrorMessage = ex.Message;
++            Teacher = await _teacherService.GetByIdAsync(TeacherId);
++            Students = await _teacherService.GetStudentsAsync(TeacherId);
++            return Page();
++        }
++
++        return RedirectToPage(new { teacherId = TeacherId });
++    }
++}
+Index: src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml.cs b/src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385444486)
++++ b/src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml.cs	(date 1781385444486)
+@@ -0,0 +1,77 @@
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.RazorPages;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Pages.Teachers;
++
++public class UploadModel : PageModel
++{
++    private readonly IExamService _examService;
++    private readonly ITeacherService _teacherService;
++
++    public UploadModel(IExamService examService, ITeacherService teacherService)
++    {
++        _examService = examService;
++        _teacherService = teacherService;
++    }
++
++    [BindProperty(SupportsGet = true)]
++    public int TeacherId { get; set; }
++
++    public string? TeacherName { get; set; }
++    public string? ErrorMessage { get; set; }
++    public IEnumerable<ExamSummaryDto>? Results { get; set; }
++
++    public async Task<IActionResult> OnGetAsync()
++    {
++        var teacher = await _teacherService.GetByIdAsync(TeacherId);
++        if (teacher is null && TeacherId != 0)
++            return NotFound();
++
++        TeacherName = teacher?.Name;
++        return Page();
++    }
++
++    public async Task<IActionResult> OnPostAsync(IFormFile? file)
++    {
++        var teacher = await _teacherService.GetByIdAsync(TeacherId);
++        TeacherName = teacher?.Name;
++
++        if (file is null || file.Length == 0)
++        {
++            ErrorMessage = "Please select an XML file.";
++            return Page();
++        }
++
++        if (!file.FileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
++            file.ContentType is not ("text/xml" or "application/xml"))
++        {
++            ErrorMessage = "Only XML files are accepted.";
++            return Page();
++        }
++
++        try
++        {
++            using var reader = new StreamReader(file.OpenReadStream());
++            var xmlContent = await reader.ReadToEndAsync();
++            var exams = await _examService.ProcessXmlAsync(xmlContent);
++
++            Results = exams.Select(e => new ExamSummaryDto(
++                e.Id,
++                e.XmlExamId,
++                e.StudentId,
++                e.SubmittedAt,
++                e.Tasks.Count,
++                e.Tasks.Count(t => t.IsCorrect),
++                e.Tasks.Count == 0 ? 0 : Math.Round((double)e.Tasks.Count(t => t.IsCorrect) / e.Tasks.Count * 100, 1)
++            )).ToList();
++        }
++        catch (Exception ex)
++        {
++            ErrorMessage = $"Processing failed: {ex.Message}";
++        }
++
++        return Page();
++    }
++}
+Index: src/StudentMathTest.Api/Pages/Teachers/Students.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Teachers/Students.cshtml b/src/StudentMathTest.Api/Pages/Teachers/Students.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385433691)
++++ b/src/StudentMathTest.Api/Pages/Teachers/Students.cshtml	(date 1781385433691)
+@@ -0,0 +1,74 @@
++@page
++@model StudentMathTest.Api.Pages.Teachers.StudentsModel
++@{
++    ViewData["Title"] = $"Students — {Model.Teacher?.Name}";
++}
++
++<nav aria-label="breadcrumb" class="mb-4">
++    <ol class="breadcrumb">
++        <li class="breadcrumb-item"><a asp-page="/Teachers/Index">Teachers</a></li>
++        <li class="breadcrumb-item active">@Model.Teacher?.Name</li>
++    </ol>
++</nav>
++
++<div class="d-flex justify-content-between align-items-center mb-4">
++    <h2 class="mb-0">Students of @Model.Teacher?.Name</h2>
++    <a asp-page="/Teachers/Upload" asp-route-teacherId="@Model.TeacherId"
++       class="btn btn-success">Upload Exam XML</a>
++</div>
++
++@if (Model.ErrorMessage is not null)
++{
++    <div class="alert alert-danger">@Model.ErrorMessage</div>
++}
++
++<div class="card shadow-sm mb-4">
++    <div class="card-header fw-semibold">Add New Student</div>
++    <div class="card-body">
++        <form method="post" class="row g-2 align-items-end">
++            <input type="hidden" asp-for="TeacherId" />
++            <div class="col-sm-8">
++                <label class="form-label">Student Name</label>
++                <input asp-for="NewStudentName" class="form-control" placeholder="e.g. Alice Johnson" required />
++            </div>
++            <div class="col-sm-4">
++                <button type="submit" class="btn btn-primary w-100">Add Student</button>
++            </div>
++        </form>
++    </div>
++</div>
++
++<div class="card shadow-sm">
++    <div class="card-header fw-semibold">Enrolled Students</div>
++    <div class="card-body p-0">
++        @if (!Model.Students.Any())
++        {
++            <p class="text-muted p-3 mb-0">No students enrolled yet.</p>
++        }
++        else
++        {
++            <table class="table table-hover mb-0">
++                <thead class="table-light">
++                    <tr>
++                        <th>ID</th>
++                        <th>Name</th>
++                        <th>Analytics</th>
++                    </tr>
++                </thead>
++                <tbody>
++                    @foreach (var student in Model.Students)
++                    {
++                        <tr>
++                            <td class="text-muted">#@student.Id</td>
++                            <td>@student.Name</td>
++                            <td>
++                                <a asp-page="/Students/Exams" asp-route-studentId="@student.Id"
++                                   class="btn btn-sm btn-outline-secondary">View Exams</a>
++                            </td>
++                        </tr>
++                    }
++                </tbody>
++            </table>
++        }
++    </div>
++</div>
+Index: src/StudentMathTest.Api/Pages/Students/Index.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Students/Index.cshtml b/src/StudentMathTest.Api/Pages/Students/Index.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385471193)
++++ b/src/StudentMathTest.Api/Pages/Students/Index.cshtml	(date 1781385471193)
+@@ -0,0 +1,24 @@
++@page
++@model StudentMathTest.Api.Pages.Students.IndexModel
++@{
++    ViewData["Title"] = "Student Analytics";
++}
++
++<div class="row justify-content-center mt-4">
++    <div class="col-md-6">
++        <h2 class="mb-4 text-center">Student Analytics</h2>
++        <div class="card shadow-sm">
++            <div class="card-body">
++                <p class="text-muted mb-3">Enter your Student ID to view your exam history and results.</p>
++                <form method="post">
++                    <div class="mb-3">
++                        <label class="form-label fw-semibold">Student ID</label>
++                        <input asp-for="StudentId" type="number" class="form-control form-control-lg"
++                               placeholder="e.g. 12345" min="1" required />
++                    </div>
++                    <button type="submit" class="btn btn-primary w-100 btn-lg">View My Exams</button>
++                </form>
++            </div>
++        </div>
++    </div>
++</div>
+Index: src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml b/src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385457851)
++++ b/src/StudentMathTest.Api/Pages/Teachers/Upload.cshtml	(date 1781385457851)
+@@ -0,0 +1,95 @@
++@page
++@model StudentMathTest.Api.Pages.Teachers.UploadModel
++@{
++    ViewData["Title"] = "Upload Exam";
++}
++
++<nav aria-label="breadcrumb" class="mb-4">
++    <ol class="breadcrumb">
++        <li class="breadcrumb-item"><a asp-page="/Teachers/Index">Teachers</a></li>
++        @if (Model.TeacherId > 0)
++        {
++            <li class="breadcrumb-item">
++                <a asp-page="/Teachers/Students" asp-route-teacherId="@Model.TeacherId">@(Model.TeacherName ?? $"Teacher {Model.TeacherId}")</a>
++            </li>
++        }
++        <li class="breadcrumb-item active">Upload Exam</li>
++    </ol>
++</nav>
++
++<h2 class="mb-4">Upload Exam XML</h2>
++
++@if (Model.ErrorMessage is not null)
++{
++    <div class="alert alert-danger">@Model.ErrorMessage</div>
++}
++
++<div class="card shadow-sm mb-4">
++    <div class="card-header fw-semibold">Select XML File</div>
++    <div class="card-body">
++        <form method="post" enctype="multipart/form-data">
++            <input type="hidden" asp-for="TeacherId" />
++            <div class="mb-3">
++                <label class="form-label">Exam XML File</label>
++                <input type="file" name="file" class="form-control" accept=".xml,text/xml,application/xml" required />
++                <div class="form-text">
++                    Expected schema: &lt;Teacher ID="..."&gt;&lt;Students&gt;&lt;Student ID="..."&gt;&lt;Exam Id="..."&gt;&lt;Task id="..."&gt;expr = answer&lt;/Task&gt;...
++                </div>
++            </div>
++            <button type="submit" class="btn btn-success">Grade Exams</button>
++        </form>
++    </div>
++</div>
++
++@if (Model.Results is not null)
++{
++    <div class="card shadow-sm">
++        <div class="card-header fw-semibold d-flex justify-content-between">
++            <span>Grading Results</span>
++            <span class="badge bg-secondary">@Model.Results.Count() exam(s) processed</span>
++        </div>
++        <div class="card-body p-0">
++            @if (!Model.Results.Any())
++            {
++                <p class="text-muted p-3 mb-0">No exams found in the uploaded file.</p>
++            }
++            else
++            {
++                <table class="table table-hover mb-0">
++                    <thead class="table-light">
++                        <tr>
++                            <th>Exam DB ID</th>
++                            <th>XML Exam ID</th>
++                            <th>Student ID</th>
++                            <th>Tasks</th>
++                            <th>Correct</th>
++                            <th>Score</th>
++                            <th>Detail</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        @foreach (var exam in Model.Results)
++                        {
++                            var scoreClass = exam.Score >= 80 ? "bg-success"
++                                           : exam.Score >= 50 ? "bg-warning text-dark"
++                                           : "bg-danger";
++                            <tr>
++                                <td class="text-muted">#@exam.ExamId</td>
++                                <td>@exam.XmlExamId</td>
++                                <td>@exam.StudentId</td>
++                                <td>@exam.TotalTasks</td>
++                                <td>@exam.CorrectTasks</td>
++                                <td><span class="badge @scoreClass">@exam.Score%</span></td>
++                                <td>
++                                    <a asp-page="/Students/ExamDetail"
++                                       asp-route-examId="@exam.ExamId"
++                                       class="btn btn-sm btn-outline-primary">View Detail</a>
++                                </td>
++                            </tr>
++                        }
++                    </tbody>
++                </table>
++            }
++        </div>
++    </div>
++}
+Index: src/StudentMathTest.Api/Pages/Students/Index.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Students/Index.cshtml.cs b/src/StudentMathTest.Api/Pages/Students/Index.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385465817)
++++ b/src/StudentMathTest.Api/Pages/Students/Index.cshtml.cs	(date 1781385465817)
+@@ -0,0 +1,20 @@
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.RazorPages;
++
++namespace StudentMathTest.Api.Pages.Students;
++
++public class IndexModel : PageModel
++{
++    [BindProperty]
++    public int StudentId { get; set; }
++
++    public void OnGet() { }
++
++    public IActionResult OnPost()
++    {
++        if (StudentId <= 0)
++            return Page();
++
++        return RedirectToPage("/Students/Exams", new { studentId = StudentId });
++    }
++}
+Index: src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml.cs b/src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385496021)
++++ b/src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml.cs	(date 1781385496021)
+@@ -0,0 +1,44 @@
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.RazorPages;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Pages.Students;
++
++public class ExamDetailModel : PageModel
++{
++    private readonly IExamService _examService;
++
++    public ExamDetailModel(IExamService examService) => _examService = examService;
++
++    [BindProperty(SupportsGet = true)]
++    public int ExamId { get; set; }
++
++    public ExamResultDto? Exam { get; set; }
++
++    public async Task<IActionResult> OnGetAsync()
++    {
++        var exam = await _examService.GetExamAsync(ExamId);
++        if (exam is null)
++            return NotFound();
++
++        Exam = new ExamResultDto(
++            exam.Id,
++            exam.XmlExamId,
++            exam.StudentId,
++            exam.TeacherId,
++            exam.SubmittedAt,
++            exam.Tasks.Count,
++            exam.Tasks.Count(t => t.IsCorrect),
++            exam.Tasks.Select(t => new TaskResultDto(
++                t.XmlTaskId,
++                t.RawExpression,
++                t.StudentAnswer,
++                t.ComputedResult,
++                t.IsCorrect
++            ))
++        );
++
++        return Page();
++    }
++}
+Index: src/StudentMathTest.Api/Pages/Students/Exams.cshtml.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Students/Exams.cshtml.cs b/src/StudentMathTest.Api/Pages/Students/Exams.cshtml.cs
+new file mode 100644
+--- /dev/null	(date 1781385476965)
++++ b/src/StudentMathTest.Api/Pages/Students/Exams.cshtml.cs	(date 1781385476965)
+@@ -0,0 +1,33 @@
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.RazorPages;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Pages.Students;
++
++public class ExamsModel : PageModel
++{
++    private readonly IExamService _examService;
++
++    public ExamsModel(IExamService examService) => _examService = examService;
++
++    [BindProperty(SupportsGet = true)]
++    public int StudentId { get; set; }
++
++    public IEnumerable<ExamSummaryDto> Exams { get; set; } = [];
++
++    public async Task OnGetAsync()
++    {
++        var exams = await _examService.GetExamsByStudentAsync(StudentId);
++
++        Exams = exams.Select(e => new ExamSummaryDto(
++            e.Id,
++            e.XmlExamId,
++            e.StudentId,
++            e.SubmittedAt,
++            e.Tasks.Count,
++            e.Tasks.Count(t => t.IsCorrect),
++            e.Tasks.Count == 0 ? 0 : Math.Round((double)e.Tasks.Count(t => t.IsCorrect) / e.Tasks.Count * 100, 1)
++        ));
++    }
++}
+Index: src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml b/src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385509037)
++++ b/src/StudentMathTest.Api/Pages/Students/ExamDetail.cshtml	(date 1781385509037)
+@@ -0,0 +1,77 @@
++@page
++@model StudentMathTest.Api.Pages.Students.ExamDetailModel
++@{
++    ViewData["Title"] = $"Exam Detail #{Model.ExamId}";
++    var exam = Model.Exam!;
++    var scoreClass = exam.CorrectTasks * 100.0 / Math.Max(exam.TotalTasks, 1) >= 80 ? "bg-success"
++                   : exam.CorrectTasks * 100.0 / Math.Max(exam.TotalTasks, 1) >= 50 ? "bg-warning text-dark"
++                   : "bg-danger";
++    var scorePct = exam.TotalTasks == 0 ? 0 : Math.Round((double)exam.CorrectTasks / exam.TotalTasks * 100, 1);
++}
++
++<nav aria-label="breadcrumb" class="mb-4">
++    <ol class="breadcrumb">
++        <li class="breadcrumb-item"><a asp-page="/Students/Index">Students</a></li>
++        <li class="breadcrumb-item">
++            <a asp-page="/Students/Exams" asp-route-studentId="@exam.StudentId">Student #@exam.StudentId</a>
++        </li>
++        <li class="breadcrumb-item active">Exam #@exam.XmlExamId</li>
++    </ol>
++</nav>
++
++<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
++    <div>
++        <h2 class="mb-1">Exam #@exam.XmlExamId — Student #@exam.StudentId</h2>
++        <p class="text-muted mb-0">
++            Submitted @exam.SubmittedAt.ToString("yyyy-MM-dd HH:mm UTC") &nbsp;|&nbsp;
++            Teacher #@exam.TeacherId
++        </p>
++    </div>
++    <div class="text-end">
++        <span class="badge @scoreClass fs-5 px-3 py-2">@scorePct%</span>
++        <div class="text-muted mt-1 small">@exam.CorrectTasks / @exam.TotalTasks correct</div>
++    </div>
++</div>
++
++<div class="card shadow-sm">
++    <div class="card-header fw-semibold">Task Breakdown</div>
++    <div class="card-body p-0">
++        <table class="table table-hover mb-0 align-middle">
++            <thead class="table-light">
++                <tr>
++                    <th>#</th>
++                    <th>Expression</th>
++                    <th>Student Answer</th>
++                    <th>Correct Answer</th>
++                    <th>Result</th>
++                </tr>
++            </thead>
++            <tbody>
++                @foreach (var task in exam.Tasks)
++                {
++                    <tr class="@(task.IsCorrect ? "table-success" : "table-danger")">
++                        <td class="text-muted">@task.TaskId</td>
++                        <td><code>@task.Expression</code></td>
++                        <td>@task.StudentAnswer</td>
++                        <td><strong>@task.CorrectAnswer</strong></td>
++                        <td>
++                            @if (task.IsCorrect)
++                            {
++                                <span class="badge badge-correct">Correct</span>
++                            }
++                            else
++                            {
++                                <span class="badge badge-wrong">Wrong</span>
++                            }
++                        </td>
++                    </tr>
++                }
++            </tbody>
++        </table>
++    </div>
++</div>
++
++<div class="mt-3">
++    <a asp-page="/Students/Exams" asp-route-studentId="@exam.StudentId"
++       class="btn btn-outline-secondary">&larr; Back to Exams</a>
++</div>
+Index: src/StudentMathTest.Api/Controllers/StudentsController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Controllers/StudentsController.cs b/src/StudentMathTest.Api/Controllers/StudentsController.cs
+new file mode 100644
+--- /dev/null	(date 1781446914542)
++++ b/src/StudentMathTest.Api/Controllers/StudentsController.cs	(date 1781446914542)
+@@ -0,0 +1,56 @@
++using Microsoft.AspNetCore.Mvc;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Controllers;
++
++[ApiController]
++[Route("api/students")]
++[Produces("application/json")]
++public class StudentsController(IExamService examService) : ControllerBase
++{
++    /// <summary>Returns all exams for a student with their scores (analytics view).</summary>
++    [HttpGet("{studentId}/exams")]
++    public async Task<IActionResult> GetExams(int studentId)
++    {
++        var exams = await examService.GetExamsByStudentAsync(studentId);
++        var result = exams.Select(e => new ExamSummaryDto(
++            e.Id,
++            e.XmlExamId,
++            e.StudentId,
++            e.SubmittedAt,
++            e.Tasks.Count,
++            e.Tasks.Count(t => t.IsCorrect),
++            e.Tasks.Count == 0 ? 0 : Math.Round((double)e.Tasks.Count(t => t.IsCorrect) / e.Tasks.Count * 100, 1)
++        ));
++        return Ok(result);
++    }
++
++    /// <summary>Returns per-task results for a student's exam, including correct answers.</summary>
++    [HttpGet("{studentId}/exams/{examId}")]
++    public async Task<IActionResult> GetExamDetail(int studentId, int examId)
++    {
++        var exam = await examService.GetExamAsync(examId);
++        if (exam is null || exam.StudentId != studentId)
++            return NotFound(new { error = $"Exam {examId} not found for student {studentId}." });
++
++        var result = new ExamResultDto(
++            exam.Id,
++            exam.XmlExamId,
++            exam.StudentId,
++            exam.TeacherId,
++            exam.SubmittedAt,
++            exam.Tasks.Count,
++            exam.Tasks.Count(t => t.IsCorrect),
++            exam.Tasks.Select(t => new TaskResultDto(
++                t.XmlTaskId,
++                t.RawExpression,
++                t.StudentAnswer,
++                t.ComputedResult,
++                t.IsCorrect
++            ))
++        );
++
++        return Ok(result);
++    }
++}
+Index: src/StudentMathTest.Api/Properties/launchSettings.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Properties/launchSettings.json b/src/StudentMathTest.Api/Properties/launchSettings.json
+new file mode 100644
+--- /dev/null	(date 1781386113500)
++++ b/src/StudentMathTest.Api/Properties/launchSettings.json	(date 1781386113500)
+@@ -0,0 +1,41 @@
++{
++  "$schema": "http://json.schemastore.org/launchsettings.json",
++  "iisSettings": {
++    "windowsAuthentication": false,
++    "anonymousAuthentication": true,
++    "iisExpress": {
++      "applicationUrl": "http://localhost:63981",
++      "sslPort": 44327
++    }
++  },
++  "profiles": {
++    "http": {
++      "commandName": "Project",
++      "dotnetRunMessages": true,
++      "launchBrowser": true,
++      "launchUrl": "",
++      "applicationUrl": "http://localhost:5284",
++      "environmentVariables": {
++        "ASPNETCORE_ENVIRONMENT": "Development"
++      }
++    },
++    "https": {
++      "commandName": "Project",
++      "dotnetRunMessages": true,
++      "launchBrowser": true,
++      "launchUrl": "",
++      "applicationUrl": "https://localhost:7052;http://localhost:5284",
++      "environmentVariables": {
++        "ASPNETCORE_ENVIRONMENT": "Development"
++      }
++    },
++    "IIS Express": {
++      "commandName": "IISExpress",
++      "launchBrowser": true,
++      "launchUrl": "",
++      "environmentVariables": {
++        "ASPNETCORE_ENVIRONMENT": "Development"
++      }
++    }
++  }
++}
+Index: src/StudentMathTest.Api/Pages/Students/Exams.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Pages/Students/Exams.cshtml b/src/StudentMathTest.Api/Pages/Students/Exams.cshtml
+new file mode 100644
+--- /dev/null	(date 1781385490053)
++++ b/src/StudentMathTest.Api/Pages/Students/Exams.cshtml	(date 1781385490053)
+@@ -0,0 +1,64 @@
++@page
++@model StudentMathTest.Api.Pages.Students.ExamsModel
++@{
++    ViewData["Title"] = $"Exams — Student {Model.StudentId}";
++}
++
++<nav aria-label="breadcrumb" class="mb-4">
++    <ol class="breadcrumb">
++        <li class="breadcrumb-item"><a asp-page="/Students/Index">Students</a></li>
++        <li class="breadcrumb-item active">Student #@Model.StudentId</li>
++    </ol>
++</nav>
++
++<h2 class="mb-4">Exam History — Student #@Model.StudentId</h2>
++
++<div class="card shadow-sm">
++    <div class="card-header fw-semibold d-flex justify-content-between">
++        <span>All Exams</span>
++        <span class="badge bg-secondary">@Model.Exams.Count() exam(s)</span>
++    </div>
++    <div class="card-body p-0">
++        @if (!Model.Exams.Any())
++        {
++            <p class="text-muted p-3 mb-0">No exams found for student #@Model.StudentId.</p>
++        }
++        else
++        {
++            <table class="table table-hover mb-0">
++                <thead class="table-light">
++                    <tr>
++                        <th>Exam ID</th>
++                        <th>XML Exam ID</th>
++                        <th>Submitted</th>
++                        <th>Tasks</th>
++                        <th>Correct</th>
++                        <th>Score</th>
++                        <th>Detail</th>
++                    </tr>
++                </thead>
++                <tbody>
++                    @foreach (var exam in Model.Exams)
++                    {
++                        var scoreClass = exam.Score >= 80 ? "bg-success"
++                                       : exam.Score >= 50 ? "bg-warning text-dark"
++                                       : "bg-danger";
++                        <tr>
++                            <td class="text-muted">#@exam.ExamId</td>
++                            <td>@exam.XmlExamId</td>
++                            <td class="text-muted">@exam.SubmittedAt.ToString("yyyy-MM-dd HH:mm")</td>
++                            <td>@exam.TotalTasks</td>
++                            <td>@exam.CorrectTasks / @exam.TotalTasks</td>
++                            <td><span class="badge @scoreClass fs-6">@exam.Score%</span></td>
++                            <td>
++                                <a asp-page="/Students/ExamDetail"
++                                   asp-route-examId="@exam.ExamId"
++                                   class="btn btn-sm btn-outline-primary">View Tasks</a>
++                            </td>
++                        </tr>
++                    }
++                </tbody>
++            </table>
++        }
++    </div>
++</div>
+Index: src/StudentMathTest.Api/Controllers/TeachersController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Controllers/TeachersController.cs b/src/StudentMathTest.Api/Controllers/TeachersController.cs
+new file mode 100644
+--- /dev/null	(date 1781446914580)
++++ b/src/StudentMathTest.Api/Controllers/TeachersController.cs	(date 1781446914580)
+@@ -0,0 +1,53 @@
++using Microsoft.AspNetCore.Mvc;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Controllers;
++
++[ApiController]
++[Route("api/teachers")]
++[Produces("application/json")]
++public class TeachersController(ITeacherService teacherService) : ControllerBase
++{
++    /// <summary>Returns all registered teachers.</summary>
++    [HttpGet]
++    public async Task<IActionResult> GetAll()
++    {
++        var teachers = await teacherService.GetAllAsync();
++        var result = teachers.Select(t => new TeacherDto(t.Id, t.Name));
++        return Ok(result);
++    }
++
++    /// <summary>Creates a new teacher.</summary>
++    [HttpPost]
++    public async Task<IActionResult> Create([FromBody] CreateTeacherRequest request)
++    {
++        var teacher = await teacherService.CreateAsync(request.Name);
++        return CreatedAtAction(nameof(GetAll), new TeacherDto(teacher.Id, teacher.Name));
++    }
++
++    /// <summary>Returns all students for a teacher.</summary>
++    [HttpGet("{teacherId}/students")]
++    public async Task<IActionResult> GetStudents(int teacherId)
++    {
++        var students = await teacherService.GetStudentsAsync(teacherId);
++        var result = students.Select(s => new StudentDto(s.Id, s.Name, s.TeacherId));
++        return Ok(result);
++    }
++
++    /// <summary>Adds a student to a teacher.</summary>
++    [HttpPost("{teacherId}/students")]
++    public async Task<IActionResult> AddStudent(int teacherId, [FromBody] CreateStudentRequest request)
++    {
++        try
++        {
++            var student = await teacherService.AddStudentAsync(teacherId, request.Name);
++            return CreatedAtAction(nameof(GetStudents), new { teacherId },
++                new StudentDto(student.Id, student.Name, student.TeacherId));
++        }
++        catch (KeyNotFoundException ex)
++        {
++            return NotFound(new { error = ex.Message });
++        }
++    }
++}
+Index: src/StudentMathTest.Api/Controllers/MathController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Controllers/MathController.cs b/src/StudentMathTest.Api/Controllers/MathController.cs
+new file mode 100644
+--- /dev/null	(date 1781446787743)
++++ b/src/StudentMathTest.Api/Controllers/MathController.cs	(date 1781446787743)
+@@ -0,0 +1,28 @@
++using Microsoft.AspNetCore.Mvc;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Controllers;
++
++[ApiController]
++[Route("api/math")]
++[Produces("application/json")]
++public class MathController(IMathEngine mathEngine) : ControllerBase
++{
++    /// <summary>Evaluates an arithmetic expression. Example: 6*2+3-4 = 11</summary>
++    [HttpGet("evaluate")]
++    public IActionResult Evaluate([FromQuery] string expression)
++    {
++        if (string.IsNullOrWhiteSpace(expression))
++            return BadRequest(new { error = "Expression is required." });
++
++        try
++        {
++            var result = mathEngine.Evaluate(expression);
++            return Ok(new { expression, result });
++        }
++        catch (Exception ex)
++        {
++            return BadRequest(new { error = ex.Message });
++        }
++    }
++}
+Index: src/StudentMathTest.Api/Controllers/IntegrationController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Controllers/IntegrationController.cs b/src/StudentMathTest.Api/Controllers/IntegrationController.cs
+new file mode 100644
+--- /dev/null	(date 1781447347301)
++++ b/src/StudentMathTest.Api/Controllers/IntegrationController.cs	(date 1781447347301)
+@@ -0,0 +1,91 @@
++using Microsoft.AspNetCore.Mvc;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Controllers;
++
++/// <summary>Stateless grading endpoint for third-party integrations. No data is persisted.</summary>
++[ApiController]
++[Route("api/integration")]
++[Produces("application/json")]
++public class IntegrationController(IXmlProcessor xmlProcessor, IMathEngine mathEngine) : ControllerBase
++{
++    /// <summary>Health check.</summary>
++    [HttpGet("health")]
++    public IActionResult Health() => Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
++
++    /// <summary>Grades an uploaded XML file and returns results without saving to the database.</summary>
++    [HttpPost("process")]
++    [Consumes("multipart/form-data")]
++    public IActionResult Process(IFormFile? file)
++    {
++        if (file == null || file.Length == 0)
++            return BadRequest(new { error = "No file uploaded." });
++
++        using var reader = new StreamReader(file.OpenReadStream());
++        var xmlContent = reader.ReadToEnd();
++
++        return ProcessXml(xmlContent);
++    }
++
++    /// <summary>Grades XML sent as a raw request body (text/xml) without saving to the database.</summary>
++    [HttpPost("process/raw")]
++    [Consumes("text/xml", "application/xml")]
++    public async Task<IActionResult> ProcessRaw()
++    {
++        using var reader = new StreamReader(Request.Body);
++        var xmlContent = await reader.ReadToEndAsync();
++
++        return string.IsNullOrWhiteSpace(xmlContent) ? BadRequest(new { error = "Request body is empty." }) : ProcessXml(xmlContent);
++    }
++
++    private IActionResult ProcessXml(string xmlContent)
++    {
++        try
++        {
++            var parsedExams = xmlProcessor.Parse(xmlContent).ToList();
++
++            var gradedExams = parsedExams.Select(exam =>
++            {
++                var tasks = exam.Tasks.Select(task =>
++                {
++                    decimal computed = 0;
++                    var isCorrect = false;
++                    try
++                    {
++                        computed = mathEngine.Evaluate(task.RawExpression);
++                        isCorrect = computed == task.StudentAnswer;
++                    }
++                    catch (Exception)
++                    {
++                        // malformed expression — task marked incorrect, processing continues
++                    }
++
++                    return new TaskResultDto(task.XmlTaskId, task.RawExpression, task.StudentAnswer, computed, isCorrect);
++                }).ToList();
++
++                return new
++                {
++                    exam.XmlExamId,
++                    exam.StudentId,
++                    exam.TeacherId,
++                    TotalTasks = tasks.Count,
++                    CorrectTasks = tasks.Count(t => t.IsCorrect),
++                    Score = tasks.Count == 0 ? 0 : Math.Round((double)tasks.Count(t => t.IsCorrect) / tasks.Count * 100, 1),
++                    Tasks = tasks
++                };
++            });
++
++            return Ok(new
++            {
++                ProcessedAt = DateTime.UtcNow,
++                TotalExams = parsedExams.Count,
++                Exams = gradedExams
++            });
++        }
++        catch (Exception ex)
++        {
++            return BadRequest(new { error = ex.Message });
++        }
++    }
++}
+Index: src/StudentMathTest.Api/Controllers/ExamsController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/Controllers/ExamsController.cs b/src/StudentMathTest.Api/Controllers/ExamsController.cs
+new file mode 100644
+--- /dev/null	(date 1781446594699)
++++ b/src/StudentMathTest.Api/Controllers/ExamsController.cs	(date 1781446594699)
+@@ -0,0 +1,75 @@
++using Microsoft.AspNetCore.Mvc;
++using StudentMathTest.Application.DTOs;
++using StudentMathTest.Domain.Interfaces;
++
++namespace StudentMathTest.Api.Controllers;
++
++[ApiController]
++[Route("api/exams")]
++[Produces("application/json")]
++public class ExamsController(IExamService examService) : ControllerBase
++{
++    /// <summary>Uploads a teacher XML file, grades all tasks, and persists results.</summary>
++    [HttpPost("upload")]
++    [Consumes("multipart/form-data")]
++    public async Task<IActionResult> Upload(IFormFile? file)
++    {
++        if (file == null || file.Length == 0)
++            return BadRequest(new { error = "No file uploaded." });
++
++        using var reader = new StreamReader(file.OpenReadStream());
++        var xmlContent = await reader.ReadToEndAsync();
++
++        try
++        {
++            var exams = await examService.ProcessXmlAsync(xmlContent);
++            var summaries = exams.Select(e => new ExamSummaryDto(
++                e.Id,
++                e.XmlExamId,
++                e.StudentId,
++                e.SubmittedAt,
++                e.Tasks.Count,
++                e.Tasks.Count(t => t.IsCorrect),
++                e.Tasks.Count == 0 ? 0 : Math.Round((double)e.Tasks.Count(t => t.IsCorrect) / e.Tasks.Count * 100, 1)
++            ));
++
++            return Ok(new UploadResultDto(
++                exams.FirstOrDefault()?.TeacherId ?? 0,
++                exams.Count(),
++                summaries
++            ));
++        }
++        catch (Exception ex)
++        {
++            return BadRequest(new { error = ex.Message });
++        }
++    }
++
++    /// <summary>Returns full graded results for a single exam by its database ID.</summary>
++    [HttpGet("{examId}")]
++    public async Task<IActionResult> GetExam(int examId)
++    {
++        var exam = await examService.GetExamAsync(examId);
++        if (exam is null)
++            return NotFound(new { error = $"Exam {examId} not found." });
++
++        var result = new ExamResultDto(
++            exam.Id,
++            exam.XmlExamId,
++            exam.StudentId,
++            exam.TeacherId,
++            exam.SubmittedAt,
++            exam.Tasks.Count,
++            exam.Tasks.Count(t => t.IsCorrect),
++            exam.Tasks.Select(t => new TaskResultDto(
++                t.XmlTaskId,
++                t.RawExpression,
++                t.StudentAnswer,
++                t.ComputedResult,
++                t.IsCorrect
++            ))
++        );
++
++        return Ok(result);
++    }
++}
+Index: src/StudentMathTest.Application/DTOs/UploadResultDto.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/UploadResultDto.cs b/src/StudentMathTest.Application/DTOs/UploadResultDto.cs
+new file mode 100644
+--- /dev/null	(date 1781447368505)
++++ b/src/StudentMathTest.Application/DTOs/UploadResultDto.cs	(date 1781447368505)
+@@ -0,0 +1,7 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record UploadResultDto(
++    int TeacherId,
++    int TotalExams,
++    IEnumerable<ExamSummaryDto> Exams
++);
+Index: src/StudentMathTest.Application/DTOs/TaskResultDto.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/TaskResultDto.cs b/src/StudentMathTest.Application/DTOs/TaskResultDto.cs
+new file mode 100644
+--- /dev/null	(date 1781447358832)
++++ b/src/StudentMathTest.Application/DTOs/TaskResultDto.cs	(date 1781447358832)
+@@ -0,0 +1,9 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record TaskResultDto(
++    string TaskId,
++    string Expression,
++    decimal StudentAnswer,
++    decimal CorrectAnswer,
++    bool IsCorrect
++);
+Index: src/StudentMathTest.Application/DTOs/ExamResultDto.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/ExamResultDto.cs b/src/StudentMathTest.Application/DTOs/ExamResultDto.cs
+new file mode 100644
+--- /dev/null	(date 1781447693986)
++++ b/src/StudentMathTest.Application/DTOs/ExamResultDto.cs	(date 1781447693986)
+@@ -0,0 +1,12 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record ExamResultDto(
++    int ExamId,
++    string XmlExamId,
++    int StudentId,
++    int TeacherId,
++    DateTime SubmittedAt,
++    int TotalTasks,
++    int CorrectTasks,
++    IEnumerable<TaskResultDto> Tasks
++);
+Index: src/StudentMathTest.Application/DTOs/TeacherDto.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/TeacherDto.cs b/src/StudentMathTest.Application/DTOs/TeacherDto.cs
+new file mode 100644
+--- /dev/null	(date 1781447371747)
++++ b/src/StudentMathTest.Application/DTOs/TeacherDto.cs	(date 1781447371747)
+@@ -0,0 +1,3 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record TeacherDto(int Id, string Name);
+Index: src/StudentMathTest.Application/DTOs/StudentDto.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/StudentDto.cs b/src/StudentMathTest.Application/DTOs/StudentDto.cs
+new file mode 100644
+--- /dev/null	(date 1781447377290)
++++ b/src/StudentMathTest.Application/DTOs/StudentDto.cs	(date 1781447377290)
+@@ -0,0 +1,3 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record StudentDto(int Id, string Name, int TeacherId);
+Index: src/StudentMathTest.Application/DTOs/ExamSummaryDto.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/ExamSummaryDto.cs b/src/StudentMathTest.Application/DTOs/ExamSummaryDto.cs
+new file mode 100644
+--- /dev/null	(date 1781447365441)
++++ b/src/StudentMathTest.Application/DTOs/ExamSummaryDto.cs	(date 1781447365441)
+@@ -0,0 +1,11 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record ExamSummaryDto(
++    int ExamId,
++    string XmlExamId,
++    int StudentId,
++    DateTime SubmittedAt,
++    int TotalTasks,
++    int CorrectTasks,
++    double Score
++);
+Index: src/StudentMathTest.Application/DTOs/CreateTeacherRequest.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/CreateTeacherRequest.cs b/src/StudentMathTest.Application/DTOs/CreateTeacherRequest.cs
+new file mode 100644
+--- /dev/null	(date 1781447380985)
++++ b/src/StudentMathTest.Application/DTOs/CreateTeacherRequest.cs	(date 1781447380985)
+@@ -0,0 +1,3 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record CreateTeacherRequest(string Name);
+Index: src/StudentMathTest.Application/DTOs/CreateStudentRequest.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/DTOs/CreateStudentRequest.cs b/src/StudentMathTest.Application/DTOs/CreateStudentRequest.cs
+new file mode 100644
+--- /dev/null	(date 1781447384032)
++++ b/src/StudentMathTest.Application/DTOs/CreateStudentRequest.cs	(date 1781447384032)
+@@ -0,0 +1,3 @@
++namespace StudentMathTest.Application.DTOs;
++
++public record CreateStudentRequest(string Name);
+Index: src/StudentMathTest.Application/Data/AppDbContext.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/Data/AppDbContext.cs b/src/StudentMathTest.Application/Data/AppDbContext.cs
+new file mode 100644
+--- /dev/null	(date 1781446963807)
++++ b/src/StudentMathTest.Application/Data/AppDbContext.cs	(date 1781446963807)
+@@ -0,0 +1,45 @@
++using Microsoft.EntityFrameworkCore;
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Application.Data;
++
++public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
++{
++    public DbSet<Teacher> Teachers => Set<Teacher>();
++    public DbSet<Student> Students => Set<Student>();
++    public DbSet<Exam> Exams => Set<Exam>();
++    public DbSet<TaskResult> TaskResults => Set<TaskResult>();
++
++    protected override void OnModelCreating(ModelBuilder modelBuilder)
++    {
++        modelBuilder.Entity<Teacher>(e =>
++        {
++            e.HasKey(t => t.Id);
++            e.Property(t => t.Name).IsRequired().HasMaxLength(200);
++            e.HasMany(t => t.Students).WithOne(s => s.Teacher).HasForeignKey(s => s.TeacherId);
++        });
++
++        modelBuilder.Entity<Student>(e =>
++        {
++            e.HasKey(s => s.Id);
++            e.Property(s => s.Name).IsRequired().HasMaxLength(200);
++            e.HasMany(s => s.Exams).WithOne(ex => ex.Student).HasForeignKey(ex => ex.StudentId);
++        });
++
++        modelBuilder.Entity<Exam>(e =>
++        {
++            e.HasKey(ex => ex.Id);
++            e.Property(ex => ex.XmlExamId).IsRequired().HasMaxLength(100);
++            e.HasMany(ex => ex.Tasks).WithOne(t => t.Exam).HasForeignKey(t => t.ExamId);
++        });
++
++        modelBuilder.Entity<TaskResult>(e =>
++        {
++            e.HasKey(t => t.Id);
++            e.Property(t => t.XmlTaskId).IsRequired().HasMaxLength(100);
++            e.Property(t => t.RawExpression).IsRequired().HasMaxLength(500);
++            e.Property(t => t.StudentAnswer).HasPrecision(18, 6);
++            e.Property(t => t.ComputedResult).HasPrecision(18, 6);
++        });
++    }
++}
+Index: src/StudentMathTest.Domain/Models/Teacher.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Models/Teacher.cs b/src/StudentMathTest.Domain/Models/Teacher.cs
+new file mode 100644
+--- /dev/null	(date 1781447392509)
++++ b/src/StudentMathTest.Domain/Models/Teacher.cs	(date 1781447392509)
+@@ -0,0 +1,8 @@
++namespace StudentMathTest.Domain.Models;
++
++public sealed class Teacher
++{
++    public int Id { get; set; }
++    public string Name { get; set; } = string.Empty;
++    public ICollection<Student> Students { get; set; } = new List<Student>();
++}
+Index: src/StudentMathTest.Application/Services/XmlProcessorService.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/Services/XmlProcessorService.cs b/src/StudentMathTest.Application/Services/XmlProcessorService.cs
+new file mode 100644
+--- /dev/null	(date 1781447388922)
++++ b/src/StudentMathTest.Application/Services/XmlProcessorService.cs	(date 1781447388922)
+@@ -0,0 +1,72 @@
++using System.Xml.Linq;
++using StudentMathTest.Domain.Interfaces;
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Application.Services;
++
++/// <summary>
++/// Parses teacher-submitted XML into Exam objects with ungraded tasks.
++/// Root element must be Teacher with an ID attribute.
++/// </summary>
++public sealed class XmlProcessorService : IXmlProcessor
++{
++    public IEnumerable<Exam> Parse(string xmlContent)
++    {
++        var doc = XDocument.Parse(xmlContent);
++        var teacherEl = doc.Root ?? throw new InvalidOperationException("XML root element is missing.");
++
++        var teacherId = int.Parse(teacherEl.Attribute("ID")?.Value
++            ?? throw new InvalidOperationException("Teacher element is missing 'ID' attribute."));
++
++        var exams = new List<Exam>();
++
++        foreach (var studentEl in teacherEl.Descendants("Student"))
++        {
++            var studentId = int.Parse(studentEl.Attribute("ID")?.Value
++                ?? throw new InvalidOperationException("Student element is missing 'ID' attribute."));
++
++            foreach (var examEl in studentEl.Elements("Exam"))
++            {
++                var xmlExamId = examEl.Attribute("Id")?.Value
++                    ?? throw new InvalidOperationException("Exam element is missing 'Id' attribute.");
++
++                var exam = new Exam
++                {
++                    XmlExamId = xmlExamId,
++                    StudentId = studentId,
++                    TeacherId = teacherId,
++                    SubmittedAt = DateTime.UtcNow
++                };
++
++                foreach (var taskEl in examEl.Elements("Task"))
++                {
++                    var taskId = taskEl.Attribute("id")?.Value
++                        ?? throw new InvalidOperationException("Task element is missing 'id' attribute.");
++
++                    var rawText = taskEl.Value.Trim();
++                    var parts = rawText.Split('=', 2);
++                    if (parts.Length != 2)
++                        throw new InvalidOperationException($"Task '{taskId}' has invalid format. Expected 'expression = answer'.");
++
++                    var expression = parts[0].Trim();
++                    if (!decimal.TryParse(parts[1].Trim(),
++                            System.Globalization.NumberStyles.Any,
++                            System.Globalization.CultureInfo.InvariantCulture,
++                            out var studentAnswer))
++                        throw new InvalidOperationException($"Task '{taskId}' has non-numeric student answer.");
++
++                    exam.Tasks.Add(new TaskResult
++                    {
++                        XmlTaskId = taskId,
++                        RawExpression = expression,
++                        StudentAnswer = studentAnswer
++                    });
++                }
++
++                exams.Add(exam);
++            }
++        }
++
++        return exams;
++    }
++}
+Index: src/StudentMathTest.Application/Services/TeacherService.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/Services/TeacherService.cs b/src/StudentMathTest.Application/Services/TeacherService.cs
+new file mode 100644
+--- /dev/null	(date 1781447055251)
++++ b/src/StudentMathTest.Application/Services/TeacherService.cs	(date 1781447055251)
+@@ -0,0 +1,37 @@
++using Microsoft.EntityFrameworkCore;
++using StudentMathTest.Application.Data;
++using StudentMathTest.Domain.Interfaces;
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Application.Services;
++
++public sealed class TeacherService(AppDbContext db) : ITeacherService
++{
++    public async Task<IEnumerable<Teacher>> GetAllAsync() =>
++        await db.Teachers.Include(t => t.Students).ToListAsync();
++
++    public async Task<Teacher?> GetByIdAsync(int id) =>
++        await db.Teachers.Include(t => t.Students).FirstOrDefaultAsync(t => t.Id == id);
++
++    public async Task<Teacher> CreateAsync(string name)
++    {
++        var teacher = new Teacher { Name = name };
++        db.Teachers.Add(teacher);
++        await db.SaveChangesAsync();
++        return teacher;
++    }
++
++    public async Task<Student> AddStudentAsync(int teacherId, string studentName)
++    {
++        _ = await db.Teachers.FindAsync(teacherId)
++            ?? throw new KeyNotFoundException($"Teacher {teacherId} not found.");
++
++        var student = new Student { Name = studentName, TeacherId = teacherId };
++        db.Students.Add(student);
++        await db.SaveChangesAsync();
++        return student;
++    }
++
++    public async Task<IEnumerable<Student>> GetStudentsAsync(int teacherId) =>
++        await db.Students.Where(s => s.TeacherId == teacherId).ToListAsync();
++}
+Index: src/StudentMathTest.Domain/Models/TaskResult.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Models/TaskResult.cs b/src/StudentMathTest.Domain/Models/TaskResult.cs
+new file mode 100644
+--- /dev/null	(date 1781447401327)
++++ b/src/StudentMathTest.Domain/Models/TaskResult.cs	(date 1781447401327)
+@@ -0,0 +1,13 @@
++namespace StudentMathTest.Domain.Models;
++
++public sealed class TaskResult
++{
++    public int Id { get; set; }
++    public int ExamId { get; set; }
++    public Exam Exam { get; set; } = null!;
++    public string XmlTaskId { get; set; } = string.Empty;
++    public string RawExpression { get; set; } = string.Empty;
++    public decimal StudentAnswer { get; set; }
++    public decimal ComputedResult { get; set; }
++    public bool IsCorrect { get; set; }
++}
+Index: src/StudentMathTest.Domain/Models/Exam.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Models/Exam.cs b/src/StudentMathTest.Domain/Models/Exam.cs
+new file mode 100644
+--- /dev/null	(date 1781447398310)
++++ b/src/StudentMathTest.Domain/Models/Exam.cs	(date 1781447398310)
+@@ -0,0 +1,13 @@
++namespace StudentMathTest.Domain.Models;
++
++public sealed class Exam
++{
++    public int Id { get; set; }
++    public string XmlExamId { get; set; } = string.Empty;
++    public int StudentId { get; set; }
++    public Student Student { get; set; } = null!;
++    public int TeacherId { get; set; }
++    public Teacher Teacher { get; set; } = null!;
++    public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
++    public ICollection<TaskResult> Tasks { get; set; } = new List<TaskResult>();
++}
+Index: src/StudentMathTest.Application/Services/ExamService.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/Services/ExamService.cs b/src/StudentMathTest.Application/Services/ExamService.cs
+new file mode 100644
+--- /dev/null	(date 1781447075063)
++++ b/src/StudentMathTest.Application/Services/ExamService.cs	(date 1781447075063)
+@@ -0,0 +1,72 @@
++using Microsoft.EntityFrameworkCore;
++using StudentMathTest.Application.Data;
++using StudentMathTest.Domain.Interfaces;
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Application.Services;
++
++public sealed class ExamService(AppDbContext db, IXmlProcessor xmlProcessor, IMathEngine mathEngine)
++    : IExamService
++{
++    public async Task<IEnumerable<Exam>> ProcessXmlAsync(string xmlContent)
++    {
++        var parsedExams = xmlProcessor.Parse(xmlContent);
++        var savedExams = new List<Exam>();
++
++        foreach (var exam in parsedExams)
++        {
++            await UpsertTeacherAsync(exam.TeacherId);
++            await UpsertStudentAsync(exam.StudentId, exam.TeacherId);
++
++            foreach (var task in exam.Tasks)
++            {
++                try
++                {
++                    task.ComputedResult = mathEngine.Evaluate(task.RawExpression);
++                    task.IsCorrect = task.ComputedResult == task.StudentAnswer;
++                }
++                catch
++                {
++                    task.ComputedResult = 0;
++                    task.IsCorrect = false;
++                }
++            }
++
++            db.Exams.Add(exam);
++            savedExams.Add(exam);
++        }
++
++        await db.SaveChangesAsync();
++        return savedExams;
++    }
++
++    public async Task<Exam?> GetExamAsync(int examId) =>
++        await db.Exams
++            .Include(e => e.Tasks)
++            .FirstOrDefaultAsync(e => e.Id == examId);
++
++    public async Task<IEnumerable<Exam>> GetExamsByStudentAsync(int studentId) =>
++        await db.Exams
++            .Include(e => e.Tasks)
++            .Where(e => e.StudentId == studentId)
++            .OrderByDescending(e => e.SubmittedAt)
++            .ToListAsync();
++
++    private async Task UpsertTeacherAsync(int teacherId)
++    {
++        if (!await db.Teachers.AnyAsync(t => t.Id == teacherId))
++        {
++            db.Teachers.Add(new Teacher { Id = teacherId, Name = $"Teacher {teacherId}" });
++            await db.SaveChangesAsync();
++        }
++    }
++
++    private async Task UpsertStudentAsync(int studentId, int teacherId)
++    {
++        if (!await db.Students.AnyAsync(s => s.Id == studentId))
++        {
++            db.Students.Add(new Student { Id = studentId, Name = $"Student {studentId}", TeacherId = teacherId });
++            await db.SaveChangesAsync();
++        }
++    }
++}
+Index: src/StudentMathTest.Domain/Interfaces/IXmlProcessor.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Interfaces/IXmlProcessor.cs b/src/StudentMathTest.Domain/Interfaces/IXmlProcessor.cs
+new file mode 100644
+--- /dev/null	(date 1781369626210)
++++ b/src/StudentMathTest.Domain/Interfaces/IXmlProcessor.cs	(date 1781369626210)
+@@ -0,0 +1,8 @@
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Domain.Interfaces;
++
++public interface IXmlProcessor
++{
++    IEnumerable<Exam> Parse(string xmlContent);
++}
+Index: src/StudentMathTest.Domain/Models/Student.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Models/Student.cs b/src/StudentMathTest.Domain/Models/Student.cs
+new file mode 100644
+--- /dev/null	(date 1781447395243)
++++ b/src/StudentMathTest.Domain/Models/Student.cs	(date 1781447395243)
+@@ -0,0 +1,10 @@
++namespace StudentMathTest.Domain.Models;
++
++public sealed class Student
++{
++    public int Id { get; set; }
++    public string Name { get; set; } = string.Empty;
++    public int TeacherId { get; set; }
++    public Teacher Teacher { get; set; } = null!;
++    public ICollection<Exam> Exams { get; set; } = new List<Exam>();
++}
+Index: src/StudentMathTest.Domain/Interfaces/IExamService.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Interfaces/IExamService.cs b/src/StudentMathTest.Domain/Interfaces/IExamService.cs
+new file mode 100644
+--- /dev/null	(date 1781369629286)
++++ b/src/StudentMathTest.Domain/Interfaces/IExamService.cs	(date 1781369629286)
+@@ -0,0 +1,10 @@
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Domain.Interfaces;
++
++public interface IExamService
++{
++    Task<IEnumerable<Exam>> ProcessXmlAsync(string xmlContent);
++    Task<Exam?> GetExamAsync(int examId);
++    Task<IEnumerable<Exam>> GetExamsByStudentAsync(int studentId);
++}
+Index: src/StudentMathTest.Domain/Interfaces/IMathEngine.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Interfaces/IMathEngine.cs b/src/StudentMathTest.Domain/Interfaces/IMathEngine.cs
+new file mode 100644
+--- /dev/null	(date 1781369619241)
++++ b/src/StudentMathTest.Domain/Interfaces/IMathEngine.cs	(date 1781369619241)
+@@ -0,0 +1,6 @@
++namespace StudentMathTest.Domain.Interfaces;
++
++public interface IMathEngine
++{
++    decimal Evaluate(string expression);
++}
+Index: src/StudentMathTest.Domain/Interfaces/ITeacherService.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/Interfaces/ITeacherService.cs b/src/StudentMathTest.Domain/Interfaces/ITeacherService.cs
+new file mode 100644
+--- /dev/null	(date 1781369632753)
++++ b/src/StudentMathTest.Domain/Interfaces/ITeacherService.cs	(date 1781369632753)
+@@ -0,0 +1,12 @@
++using StudentMathTest.Domain.Models;
++
++namespace StudentMathTest.Domain.Interfaces;
++
++public interface ITeacherService
++{
++    Task<IEnumerable<Teacher>> GetAllAsync();
++    Task<Teacher?> GetByIdAsync(int id);
++    Task<Teacher> CreateAsync(string name);
++    Task<Student> AddStudentAsync(int teacherId, string studentName);
++    Task<IEnumerable<Student>> GetStudentsAsync(int teacherId);
++}
+Index: StudentMathTest.sln
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/StudentMathTest.sln b/StudentMathTest.sln
+new file mode 100644
+--- /dev/null	(date 1781369560188)
++++ b/StudentMathTest.sln	(date 1781369560188)
+@@ -0,0 +1,84 @@
++
++Microsoft Visual Studio Solution File, Format Version 12.00
++# Visual Studio Version 17
++VisualStudioVersion = 17.0.31903.59
++MinimumVisualStudioVersion = 10.0.40219.1
++Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StudentMathTest.Domain", "src\StudentMathTest.Domain\StudentMathTest.Domain.csproj", "{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StudentMathTest.MathEngine", "src\StudentMathTest.MathEngine\StudentMathTest.MathEngine.csproj", "{E24A7733-1E12-4BE5-A21E-23C836DBADA7}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StudentMathTest.Application", "src\StudentMathTest.Application\StudentMathTest.Application.csproj", "{86932F4D-068E-4C51-A6EE-1B92561ECC11}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StudentMathTest.Api", "src\StudentMathTest.Api\StudentMathTest.Api.csproj", "{9D12521B-5C86-44BE-A566-2B08C7E0858A}"
++EndProject
++Global
++	GlobalSection(SolutionConfigurationPlatforms) = preSolution
++		Debug|Any CPU = Debug|Any CPU
++		Debug|x64 = Debug|x64
++		Debug|x86 = Debug|x86
++		Release|Any CPU = Release|Any CPU
++		Release|x64 = Release|x64
++		Release|x86 = Release|x86
++	EndGlobalSection
++	GlobalSection(ProjectConfigurationPlatforms) = postSolution
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Debug|x64.ActiveCfg = Debug|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Debug|x64.Build.0 = Debug|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Debug|x86.ActiveCfg = Debug|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Debug|x86.Build.0 = Debug|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Release|Any CPU.Build.0 = Release|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Release|x64.ActiveCfg = Release|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Release|x64.Build.0 = Release|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Release|x86.ActiveCfg = Release|Any CPU
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F}.Release|x86.Build.0 = Release|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Debug|x64.ActiveCfg = Debug|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Debug|x64.Build.0 = Debug|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Debug|x86.ActiveCfg = Debug|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Debug|x86.Build.0 = Debug|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Release|Any CPU.Build.0 = Release|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Release|x64.ActiveCfg = Release|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Release|x64.Build.0 = Release|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Release|x86.ActiveCfg = Release|Any CPU
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7}.Release|x86.Build.0 = Release|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Debug|x64.ActiveCfg = Debug|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Debug|x64.Build.0 = Debug|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Debug|x86.ActiveCfg = Debug|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Debug|x86.Build.0 = Debug|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Release|Any CPU.Build.0 = Release|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Release|x64.ActiveCfg = Release|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Release|x64.Build.0 = Release|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Release|x86.ActiveCfg = Release|Any CPU
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11}.Release|x86.Build.0 = Release|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Debug|x64.ActiveCfg = Debug|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Debug|x64.Build.0 = Debug|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Debug|x86.ActiveCfg = Debug|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Debug|x86.Build.0 = Debug|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Release|Any CPU.Build.0 = Release|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Release|x64.ActiveCfg = Release|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Release|x64.Build.0 = Release|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Release|x86.ActiveCfg = Release|Any CPU
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A}.Release|x86.Build.0 = Release|Any CPU
++	EndGlobalSection
++	GlobalSection(SolutionProperties) = preSolution
++		HideSolutionNode = FALSE
++	EndGlobalSection
++	GlobalSection(NestedProjects) = preSolution
++		{BF59A9FF-2F0C-4B20-96EE-D68EDCB6BE8F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
++		{E24A7733-1E12-4BE5-A21E-23C836DBADA7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
++		{86932F4D-068E-4C51-A6EE-1B92561ECC11} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
++		{9D12521B-5C86-44BE-A566-2B08C7E0858A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
++	EndGlobalSection
++EndGlobal
+Index: .gitignore
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+--- /dev/null	(date 1781369596066)
++++ b/.gitignore	(date 1781369596066)
+@@ -0,0 +1,484 @@
++## Ignore Visual Studio temporary files, build results, and
++## files generated by popular Visual Studio add-ons.
++##
++## Get latest from `dotnet new gitignore`
++
++# dotenv files
++.env
++
++# User-specific files
++*.rsuser
++*.suo
++*.user
++*.userosscache
++*.sln.docstates
++
++# User-specific files (MonoDevelop/Xamarin Studio)
++*.userprefs
++
++# Mono auto generated files
++mono_crash.*
++
++# Build results
++[Dd]ebug/
++[Dd]ebugPublic/
++[Rr]elease/
++[Rr]eleases/
++x64/
++x86/
++[Ww][Ii][Nn]32/
++[Aa][Rr][Mm]/
++[Aa][Rr][Mm]64/
++bld/
++[Bb]in/
++[Oo]bj/
++[Ll]og/
++[Ll]ogs/
++
++# Visual Studio 2015/2017 cache/options directory
++.vs/
++# Uncomment if you have tasks that create the project's static files in wwwroot
++#wwwroot/
++
++# Visual Studio 2017 auto generated files
++Generated\ Files/
++
++# MSTest test Results
++[Tt]est[Rr]esult*/
++[Bb]uild[Ll]og.*
++
++# NUnit
++*.VisualState.xml
++TestResult.xml
++nunit-*.xml
++
++# Build Results of an ATL Project
++[Dd]ebugPS/
++[Rr]eleasePS/
++dlldata.c
++
++# Benchmark Results
++BenchmarkDotNet.Artifacts/
++
++# .NET
++project.lock.json
++project.fragment.lock.json
++artifacts/
++
++# Tye
++.tye/
++
++# ASP.NET Scaffolding
++ScaffoldingReadMe.txt
++
++# StyleCop
++StyleCopReport.xml
++
++# Files built by Visual Studio
++*_i.c
++*_p.c
++*_h.h
++*.ilk
++*.meta
++*.obj
++*.iobj
++*.pch
++*.pdb
++*.ipdb
++*.pgc
++*.pgd
++*.rsp
++*.sbr
++*.tlb
++*.tli
++*.tlh
++*.tmp
++*.tmp_proj
++*_wpftmp.csproj
++*.log
++*.tlog
++*.vspscc
++*.vssscc
++.builds
++*.pidb
++*.svclog
++*.scc
++
++# Chutzpah Test files
++_Chutzpah*
++
++# Visual C++ cache files
++ipch/
++*.aps
++*.ncb
++*.opendb
++*.opensdf
++*.sdf
++*.cachefile
++*.VC.db
++*.VC.VC.opendb
++
++# Visual Studio profiler
++*.psess
++*.vsp
++*.vspx
++*.sap
++
++# Visual Studio Trace Files
++*.e2e
++
++# TFS 2012 Local Workspace
++$tf/
++
++# Guidance Automation Toolkit
++*.gpState
++
++# ReSharper is a .NET coding add-in
++_ReSharper*/
++*.[Rr]e[Ss]harper
++*.DotSettings.user
++
++# TeamCity is a build add-in
++_TeamCity*
++
++# DotCover is a Code Coverage Tool
++*.dotCover
++
++# AxoCover is a Code Coverage Tool
++.axoCover/*
++!.axoCover/settings.json
++
++# Coverlet is a free, cross platform Code Coverage Tool
++coverage*.json
++coverage*.xml
++coverage*.info
++
++# Visual Studio code coverage results
++*.coverage
++*.coveragexml
++
++# NCrunch
++_NCrunch_*
++.*crunch*.local.xml
++nCrunchTemp_*
++
++# MightyMoose
++*.mm.*
++AutoTest.Net/
++
++# Web workbench (sass)
++.sass-cache/
++
++# Installshield output folder
++[Ee]xpress/
++
++# DocProject is a documentation generator add-in
++DocProject/buildhelp/
++DocProject/Help/*.HxT
++DocProject/Help/*.HxC
++DocProject/Help/*.hhc
++DocProject/Help/*.hhk
++DocProject/Help/*.hhp
++DocProject/Help/Html2
++DocProject/Help/html
++
++# Click-Once directory
++publish/
++
++# Publish Web Output
++*.[Pp]ublish.xml
++*.azurePubxml
++# Note: Comment the next line if you want to checkin your web deploy settings,
++# but database connection strings (with potential passwords) will be unencrypted
++*.pubxml
++*.publishproj
++
++# Microsoft Azure Web App publish settings. Comment the next line if you want to
++# checkin your Azure Web App publish settings, but sensitive information contained
++# in these scripts will be unencrypted
++PublishScripts/
++
++# NuGet Packages
++*.nupkg
++# NuGet Symbol Packages
++*.snupkg
++# The packages folder can be ignored because of Package Restore
++**/[Pp]ackages/*
++# except build/, which is used as an MSBuild target.
++!**/[Pp]ackages/build/
++# Uncomment if necessary however generally it will be regenerated when needed
++#!**/[Pp]ackages/repositories.config
++# NuGet v3's project.json files produces more ignorable files
++*.nuget.props
++*.nuget.targets
++
++# Microsoft Azure Build Output
++csx/
++*.build.csdef
++
++# Microsoft Azure Emulator
++ecf/
++rcf/
++
++# Windows Store app package directories and files
++AppPackages/
++BundleArtifacts/
++Package.StoreAssociation.xml
++_pkginfo.txt
++*.appx
++*.appxbundle
++*.appxupload
++
++# Visual Studio cache files
++# files ending in .cache can be ignored
++*.[Cc]ache
++# but keep track of directories ending in .cache
++!?*.[Cc]ache/
++
++# Others
++ClientBin/
++~$*
++*~
++*.dbmdl
++*.dbproj.schemaview
++*.jfm
++*.pfx
++*.publishsettings
++orleans.codegen.cs
++
++# Including strong name files can present a security risk
++# (https://github.com/github/gitignore/pull/2483#issue-259490424)
++#*.snk
++
++# Since there are multiple workflows, uncomment next line to ignore bower_components
++# (https://github.com/github/gitignore/pull/1529#issuecomment-104372622)
++#bower_components/
++
++# RIA/Silverlight projects
++Generated_Code/
++
++# Backup & report files from converting an old project file
++# to a newer Visual Studio version. Backup files are not needed,
++# because we have git ;-)
++_UpgradeReport_Files/
++Backup*/
++UpgradeLog*.XML
++UpgradeLog*.htm
++ServiceFabricBackup/
++*.rptproj.bak
++
++# SQL Server files
++*.mdf
++*.ldf
++*.ndf
++
++# Business Intelligence projects
++*.rdl.data
++*.bim.layout
++*.bim_*.settings
++*.rptproj.rsuser
++*- [Bb]ackup.rdl
++*- [Bb]ackup ([0-9]).rdl
++*- [Bb]ackup ([0-9][0-9]).rdl
++
++# Microsoft Fakes
++FakesAssemblies/
++
++# GhostDoc plugin setting file
++*.GhostDoc.xml
++
++# Node.js Tools for Visual Studio
++.ntvs_analysis.dat
++node_modules/
++
++# Visual Studio 6 build log
++*.plg
++
++# Visual Studio 6 workspace options file
++*.opt
++
++# Visual Studio 6 auto-generated workspace file (contains which files were open etc.)
++*.vbw
++
++# Visual Studio 6 auto-generated project file (contains which files were open etc.)
++*.vbp
++
++# Visual Studio 6 workspace and project file (working project files containing files to include in project)
++*.dsw
++*.dsp
++
++# Visual Studio 6 technical files
++*.ncb
++*.aps
++
++# Visual Studio LightSwitch build output
++**/*.HTMLClient/GeneratedArtifacts
++**/*.DesktopClient/GeneratedArtifacts
++**/*.DesktopClient/ModelManifest.xml
++**/*.Server/GeneratedArtifacts
++**/*.Server/ModelManifest.xml
++_Pvt_Extensions
++
++# Paket dependency manager
++.paket/paket.exe
++paket-files/
++
++# FAKE - F# Make
++.fake/
++
++# CodeRush personal settings
++.cr/personal
++
++# Python Tools for Visual Studio (PTVS)
++__pycache__/
++*.pyc
++
++# Cake - Uncomment if you are using it
++# tools/**
++# !tools/packages.config
++
++# Tabs Studio
++*.tss
++
++# Telerik's JustMock configuration file
++*.jmconfig
++
++# BizTalk build output
++*.btp.cs
++*.btm.cs
++*.odx.cs
++*.xsd.cs
++
++# OpenCover UI analysis results
++OpenCover/
++
++# Azure Stream Analytics local run output
++ASALocalRun/
++
++# MSBuild Binary and Structured Log
++*.binlog
++
++# NVidia Nsight GPU debugger configuration file
++*.nvuser
++
++# MFractors (Xamarin productivity tool) working folder
++.mfractor/
++
++# Local History for Visual Studio
++.localhistory/
++
++# Visual Studio History (VSHistory) files
++.vshistory/
++
++# BeatPulse healthcheck temp database
++healthchecksdb
++
++# Backup folder for Package Reference Convert tool in Visual Studio 2017
++MigrationBackup/
++
++# Ionide (cross platform F# VS Code tools) working folder
++.ionide/
++
++# Fody - auto-generated XML schema
++FodyWeavers.xsd
++
++# VS Code files for those working on multiple tools
++.vscode/*
++!.vscode/settings.json
++!.vscode/tasks.json
++!.vscode/launch.json
++!.vscode/extensions.json
++*.code-workspace
++
++# Local History for Visual Studio Code
++.history/
++
++# Windows Installer files from build outputs
++*.cab
++*.msi
++*.msix
++*.msm
++*.msp
++
++# JetBrains Rider
++*.sln.iml
++.idea
++
++##
++## Visual studio for Mac
++##
++
++
++# globs
++Makefile.in
++*.userprefs
++*.usertasks
++config.make
++config.status
++aclocal.m4
++install-sh
++autom4te.cache/
++*.tar.gz
++tarballs/
++test-results/
++
++# Mac bundle stuff
++*.dmg
++*.app
++
++# content below from: https://github.com/github/gitignore/blob/master/Global/macOS.gitignore
++# General
++.DS_Store
++.AppleDouble
++.LSOverride
++
++# Icon must end with two \r
++Icon
++
++
++# Thumbnails
++._*
++
++# Files that might appear in the root of a volume
++.DocumentRevisions-V100
++.fseventsd
++.Spotlight-V100
++.TemporaryItems
++.Trashes
++.VolumeIcon.icns
++.com.apple.timemachine.donotpresent
++
++# Directories potentially created on remote AFP share
++.AppleDB
++.AppleDesktop
++Network Trash Folder
++Temporary Items
++.apdisk
++
++# content below from: https://github.com/github/gitignore/blob/master/Global/Windows.gitignore
++# Windows thumbnail cache files
++Thumbs.db
++ehthumbs.db
++ehthumbs_vista.db
++
++# Dump file
++*.stackdump
++
++# Folder config file
++[Dd]esktop.ini
++
++# Recycle Bin used on file shares
++$RECYCLE.BIN/
++
++# Windows Installer files
++*.cab
++*.msi
++*.msix
++*.msm
++*.msp
++
++# Windows shortcuts
++*.lnk
++
++# Vim temporary swap files
++*.swp
+Index: README.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/README.md b/README.md
+new file mode 100644
+--- /dev/null	(date 1781387505821)
++++ b/README.md	(date 1781387505821)
+@@ -0,0 +1,232 @@
++# Student Math Test System
++
++An ASP.NET Core 8 Web API that automatically grades student arithmetic exams uploaded as XML files by teachers.
++
++## Architecture
++
++```
++StudentMathTest.sln
++├── StudentMathTest.Api          → ASP.NET Core Web API, Swagger UI, DI wiring
++├── StudentMathTest.Domain       → Models, Interfaces (zero external dependencies)
++├── StudentMathTest.Application  → EF Core DbContext, services, DTOs
++└── StudentMathTest.MathEngine   → Independent arithmetic expression evaluator
++```
++
++**Tech stack:** .NET 8, ASP.NET Core, Entity Framework Core 8, SQLite, Swashbuckle/Swagger
++
++## Getting Started
++
++### Prerequisites
++
++- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
++
++### Run
++
++```bash
++cd src/StudentMathTest.Api
++dotnet run
++```
++
++The home page opens at **http://localhost:5284** (or the port shown in the console).  
++Swagger API docs are available at `/swagger`.  
++The SQLite database (`mathtest.db`) is created automatically on first run.
++
++## API Endpoints
++
++### Teacher Management
++| Method | Route | Description |
++|--------|-------|-------------|
++| `GET` | `/api/teachers` | List all teachers |
++| `POST` | `/api/teachers` | Create a teacher |
++| `GET` | `/api/teachers/{teacherId}/students` | List students for a teacher |
++| `POST` | `/api/teachers/{teacherId}/students` | Add a student to a teacher |
++
++### Exam Upload & Grading
++| Method | Route | Description |
++|--------|-------|-------------|
++| `POST` | `/api/exams/upload` | Upload XML file — grades all exams, returns summary |
++| `GET` | `/api/exams/{examId}` | Get full graded result for one exam |
++
++### Student Analytics
++| Method | Route | Description |
++|--------|-------|-------------|
++| `GET` | `/api/students/{studentId}/exams` | List all exams for a student with scores |
++| `GET` | `/api/students/{studentId}/exams/{examId}` | Detailed per-task breakdown |
++
++### Math Engine (direct)
++| Method | Route | Description |
++|--------|-------|-------------|
++| `GET` | `/api/math/evaluate?expression=6*2+3-4` | Evaluate any arithmetic expression |
++
++### Third-Party Integration
++| Method | Route | Description |
++|--------|-------|-------------|
++| `GET` | `/api/integration/health` | Health check |
++| `POST` | `/api/integration/process` | Grade XML (file upload) — stateless, no DB write |
++| `POST` | `/api/integration/process/raw` | Grade XML (raw body, `text/xml`) — stateless, no DB write |
++
++## End-to-End Demo Walkthrough
++
++Follow these steps to showcase every feature of the system.
++
++### Step 1 — Create a Teacher
++
++1. Go to `/Teachers`
++2. Enter a name (e.g. `Mr. Smith`) and click **Add Teacher**
++3. Note the auto-assigned Teacher ID shown in the table (e.g. `#1`)
++
++> **Important:** The `Teacher ID` in your XML file must match the ID assigned here.  
++> If you created a teacher with ID `1`, your XML must have `<Teacher ID="1">`.
++
++### Step 2 — Add Students manually (optional)
++
++1. Click **Manage Students** next to the teacher
++2. Add two students, e.g. `Alice` and `Bob`
++3. Note their assigned IDs (e.g. `#1`, `#2`)
++
++> Students referenced in the XML are also auto-created on upload if they don't exist yet, so this step is optional.
++
++### Step 3 — Create the exam XML file
++
++Save the following as `exam.xml`. **Replace `Teacher ID="1"` with the actual ID from Step 1.**
++
++```xml
++<Teacher ID="1">
++  <Students>
++    <Student ID="12345">
++      <Exam Id="1">
++        <Task id="1"> 2+3/6-4 = 74 </Task>
++        <Task id="2"> 6*2+3-4 = 22 </Task>
++        <Task id="3"> 10*2-5 = 99 </Task>
++        <Task id="4"> 8/2+2 = 99 </Task>
++      </Exam>
++    </Student>
++    <Student ID="54321">
++      <Exam Id="1">
++        <Task id="1"> 2+3/6-4 = -1.5 </Task>
++        <Task id="2"> 6*2+3-4 = 11 </Task>
++        <Task id="3"> 10*2-5 = 15 </Task>
++        <Task id="4"> 8/2+2 = 6 </Task>
++      </Exam>
++    </Student>
++  </Students>
++</Teacher>
++```
++
++> Student `12345` has all **wrong** answers (0%). Student `54321` has all **correct** answers (100%).  
++> This makes the contrast clear in the demo.
++
++### Step 4 — Upload the XML (mass grading)
++
++1. Go to `/Teachers` → click **Upload Exam** next to your teacher
++2. Choose `exam.xml` and click **Grade Exams**
++3. The results table appears immediately:
++   - Student `12345`: **0%** (red badge)
++   - Student `54321`: **100%** (green badge)
++
++This demonstrates XML upload, automatic grading of multiple students in one file, and instant score reporting.
++
++### Step 5 — View detailed task breakdown
++
++1. Click **View Detail** on the student `12345` row — every task row is red with the correct answer shown
++2. Click **View Detail** on the student `54321` row — every task row is green
++
++This demonstrates the analytics view with per-task correct/incorrect breakdown.
++
++### Step 6 — Student self-service analytics
++
++1. Go to `/Students`
++2. Enter student ID `12345` and click **View My Exams**
++3. See the exam list with the score badge
++4. Click **View Tasks** for the full per-task breakdown
++
++This demonstrates the independent student-facing analytics UI.
++
++### Step 7 — Math Engine (direct evaluation)
++
++Go to `/swagger`, expand **Math**, click `GET /api/math/evaluate`, then **Try it out**:
++
++| Expression | Expected result |
++|-----------|-----------------|
++| `6*2+3-4` | `11` |
++| `2+3/6-4` | `-1.5` |
++| `10*2-5` | `15` |
++| `8/2+2` | `6` |
++
++This demonstrates the independent math processor with correct operator precedence (`*`/`/` before `+`/`-`).
++
++### Step 8 — Third-party integration endpoint
++
++In Swagger, expand **Integration**:
++
++1. `GET /api/integration/health` → returns `{ "status": "healthy" }`
++2. `POST /api/integration/process` → upload `exam.xml`
++   - Returns fully graded JSON with no database writes — pure stateless processing
++
++This demonstrates the independent integration point designed for external systems.
++
++### Step 9 — Verify via REST API
++
++In Swagger:
++
++| Endpoint | What it shows |
++|----------|--------------|
++| `GET /api/teachers` | All registered teachers |
++| `GET /api/students/12345/exams` | Exam list for student 12345 |
++| `GET /api/students/12345/exams/{examId}` | Full JSON task breakdown |
++
++### Feature coverage summary
++
++| Requirement | Demonstrated in |
++|---|---|
++| Teacher UI — manage students | Steps 1–2 |
++| Teacher UI — upload XML | Step 4 |
++| Automatic mass test checking | Step 4 (two students graded at once) |
++| Math engine with correct precedence | Steps 4, 7 |
++| Student analytics UI | Steps 5–6 |
++| Independent integration point | Step 8 |
++| Independent math processor | Step 7 |
++| Microsoft technologies (EF Core, Razor Pages, ASP.NET Core, SQLite) | Throughout |
++
++---
++
++## XML Schema
++
++```xml
++<Teacher ID="11111">
++  <Students>
++    <Student ID="12345">
++      <Exam Id="1">
++        <Task id="1"> 2+3/6-4 = 74 </Task>
++        <Task id="2"> 6*2+3-4 = 22 </Task>
++      </Exam>
++    </Student>
++    <Student ID="54321">
++      <Exam Id="1">
++        <Task id="1"> 2+3/6-4 = 74 </Task>
++        <Task id="2"> 6*2+3-4 = 22 </Task>
++      </Exam>
++    </Student>
++  </Students>
++</Teacher>
++```
++
++Tasks follow the format: `expression = studentAnswer`
++
++## Math Engine
++
++The `ArithmeticEvaluator` uses a recursive-descent parser with standard operator precedence (`*` and `/` before `+` and `-`):
++
++| Expression | Student Answer | Correct Answer | Verdict |
++|-----------|----------------|----------------|---------|
++| `6*2+3-4` | 22 | **11** | Incorrect |
++| `2+3/6-4` | 74 | **-1.5** | Incorrect |
++| `6*2+3-4` | 11 | **11** | Correct |
++
++## Assumptions
++
++- Teacher and Student IDs in the XML are used as primary keys. If an ID doesn't exist in the database, the entity is auto-created (upsert).
++- Standard operator precedence applies; no parentheses are expected in tasks.
++- Decimal division is used (e.g. `3/6 = 0.5`).
++- Uploading the same exam XML multiple times creates new exam records (no deduplication).
++- No authentication or roles — the Swagger UI is fully open.
+Index: NuGet.config
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/NuGet.config b/NuGet.config
+new file mode 100644
+--- /dev/null	(date 1781369573446)
++++ b/NuGet.config	(date 1781369573446)
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<configuration>
++  <packageSources>
++    <clear />
++    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
++  </packageSources>
++</configuration>
+Index: src/StudentMathTest.Domain/StudentMathTest.Domain.csproj
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Domain/StudentMathTest.Domain.csproj b/src/StudentMathTest.Domain/StudentMathTest.Domain.csproj
+new file mode 100644
+--- /dev/null	(date 1781369541880)
++++ b/src/StudentMathTest.Domain/StudentMathTest.Domain.csproj	(date 1781369541880)
+@@ -0,0 +1,9 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++</Project>
+Index: src/StudentMathTest.Application/StudentMathTest.Application.csproj
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Application/StudentMathTest.Application.csproj b/src/StudentMathTest.Application/StudentMathTest.Application.csproj
+new file mode 100644
+--- /dev/null	(date 1781369582839)
++++ b/src/StudentMathTest.Application/StudentMathTest.Application.csproj	(date 1781369582839)
+@@ -0,0 +1,19 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <ItemGroup>
++    <ProjectReference Include="..\StudentMathTest.Domain\StudentMathTest.Domain.csproj" />
++    <ProjectReference Include="..\StudentMathTest.MathEngine\StudentMathTest.MathEngine.csproj" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
++    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
++  </ItemGroup>
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++</Project>
+Index: src/StudentMathTest.Api/StudentMathTest.Api.csproj
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/StudentMathTest.Api/StudentMathTest.Api.csproj b/src/StudentMathTest.Api/StudentMathTest.Api.csproj
+new file mode 100644
+--- /dev/null	(date 1781369767924)
++++ b/src/StudentMathTest.Api/StudentMathTest.Api.csproj	(date 1781369767924)
+@@ -0,0 +1,25 @@
++<Project Sdk="Microsoft.NET.Sdk.Web">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <GenerateDocumentationFile>true</GenerateDocumentationFile>
++    <NoWarn>$(NoWarn);1591</NoWarn>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.22" />
++    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
++      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
++      <PrivateAssets>all</PrivateAssets>
++    </PackageReference>
++    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\StudentMathTest.Application\StudentMathTest.Application.csproj" />
++    <ProjectReference Include="..\StudentMathTest.Domain\StudentMathTest.Domain.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/src/StudentMathTest.Api/mathtest.db-wal b/src/StudentMathTest.Api/mathtest.db-wal
+new file mode 100644
